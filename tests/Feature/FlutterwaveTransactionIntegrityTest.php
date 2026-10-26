@@ -153,5 +153,10 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
 
         $this->assertSame('pending', $booking->fresh()->status);
         $this->assertSame('confirmed', $other->fresh()->status);
+        $this->assertDatabaseHas('payment_reconciliation_cases', [
+            'payment_reference' => self::REFERENCE,
+            'reason' => 'room_date_conflict',
+            'status' => 'needs_review',
+        ]);
     }
 }
