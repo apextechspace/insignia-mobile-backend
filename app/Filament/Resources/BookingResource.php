@@ -52,7 +52,7 @@ class BookingResource extends Resource
                         'completed' => 'Completed',
                     ])
                     ->required()
-                    ->default('pending'),
+                    ->default('pending')->disabled()->dehydrated(false),
                 Forms\Components\TextInput::make('payment_reference')
                     ->maxLength(255),
                 Forms\Components\FileUpload::make('receipt_url')
