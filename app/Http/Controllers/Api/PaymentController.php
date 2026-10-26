@@ -217,8 +217,8 @@ class PaymentController extends Controller
             $record->refresh();
 
             return response()->json([
-                'status'  => $confirmed || !empty($record->paid_at) ? 'success' : 'pending',
-                'is_paid' => $confirmed || !empty($record->paid_at),
+                'status'  => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists() ? 'success' : 'pending',
+                'is_paid' => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists(),
                 'record'  => $record,
             ]);
         }
@@ -436,59 +436,68 @@ class PaymentController extends Controller
     }
 
     /**
-     * Confirm once after provider verification, with row locks and no duplicate notification.
+     * Apply provider-verified payment once, preserving all past checkout attempts.
+     * When funds arrive for a conflicting/inactive booking, record an exception
+     * for finance rather than incorrectly confirming the reservation.
      */
     protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave'): bool
     {
-        if ($gateway === 'flutterwave' && !$externalId) {
+        if ($gateway !== 'flutterwave' || !$externalId) {
             return false;
         }
 
-        $notification = DB::transaction(function () use ($reference, $externalId, $gateway) {
-            $model = $this->findRecordByReference($reference);
-            if (!$model) {
+        $notification = DB::transaction(function () use ($reference, $externalId) {
+            $attempt = PaymentAttempt::where('reference', $reference)->first();
+            if (!$attempt || $attempt->gateway !== 'flutterwave') {
                 return null;
             }
 
+            $model = $attempt->payable;
+            if (!$model) {
+                Log::error('Payment attempt payable missing', ['reference' => $reference]);
+                return null;
+            }
+
+            // Consistent ordering: lock suite first, then booking, then attempt.
             if ($model instanceof Booking) {
-                // Serialize payment confirmations for competing stays in the same suite.
                 \App\Models\Room::whereKey($model->room_id)->lockForUpdate()->firstOrFail();
             }
 
             $record = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
-            $referenceColumn = $gateway === 'flutterwave' ? 'flutterwave_reference' : 'opay_reference';
-            $idColumn = $gateway === 'flutterwave' ? 'flutterwave_transaction_id' : 'opay_order_id';
+            $attempt = PaymentAttempt::whereKey($attempt->getKey())->lockForUpdate()->firstOrFail();
 
-            if ($record->{$referenceColumn} !== $reference || !empty($record->paid_at)) {
+            if ($attempt->status === 'confirmed') {
+                return null; // Webhook replay, no additional notification.
+            }
+
+            if ($attempt->provider_transaction_id
+                && $attempt->provider_transaction_id !== $externalId) {
+                $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_mismatch');
                 return null;
             }
+
+            // A provider transaction is globally unique, even across payable types.
+            if (PaymentAttempt::where('provider_transaction_id', $externalId)
+                ->whereKeyNot($attempt->getKey())->exists()) {
+                $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_reused');
+                return null;
+            }
+
+            $currentPrice = $record instanceof FoodOrder ? $record->total_amount : $record->total_price;
+            if (!is_numeric($currentPrice)
+                || (int) round(((float) $attempt->amount) * 100) !== (int) round(((float) $currentPrice) * 100)) {
+                $this->flagPaymentForReview($attempt, $externalId, 'payable_amount_changed');
+                return null;
+            }
+
+            if (!empty($record->paid_at)) {
+                $this->flagPaymentForReview($attempt, $externalId, 'already_paid_other_attempt');
+                return null;
+            }
+
             if (in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
-                \App\Models\PaymentReconciliationCase::updateOrCreate(
-                    ['payment_reference' => $reference],
-                    [
-                        'gateway' => $gateway,
-                        'provider_transaction_id' => $externalId,
-                        'payable_type' => get_class($record),
-                        'payable_id' => $record->getKey(),
-                        'reason' => 'payable_inactive',
-                        'status' => 'needs_review',
-                    ]
-                );
-                Log::warning('Payment for inactive record needs reconciliation', ['reference' => $reference]);
+                $this->flagPaymentForReview($attempt, $externalId, 'payable_inactive');
                 return null;
-            }
-
-            if ($externalId) {
-                foreach ([Booking::class, Order::class, FoodOrder::class, ServiceBooking::class] as $type) {
-                    $query = $type::where($idColumn, $externalId);
-                    if ($type === get_class($record)) {
-                        $query->whereKeyNot($record->getKey());
-                    }
-                    if ($query->exists()) {
-                        Log::warning('Gateway transaction ID has already been assigned', ['reference' => $reference]);
-                        return null;
-                    }
-                }
             }
 
             if ($record instanceof Booking) {
@@ -498,30 +507,25 @@ class PaymentController extends Controller
                     ->where('check_in', '<', $record->check_out)
                     ->where('check_out', '>', $record->check_in)
                     ->exists();
+
                 if ($conflict) {
-                    \App\Models\PaymentReconciliationCase::updateOrCreate(
-                        ['payment_reference' => $reference],
-                        [
-                            'gateway' => $gateway,
-                            'provider_transaction_id' => $externalId,
-                            'payable_type' => get_class($record),
-                            'payable_id' => $record->getKey(),
-                            'reason' => 'room_date_conflict',
-                            'status' => 'needs_review',
-                        ]
-                    );
-                    Log::error('Paid reservation date conflict requires reconciliation', [
-                        'booking_id' => $record->id, 'reference' => $reference,
-                    ]);
+                    $this->flagPaymentForReview($attempt, $externalId, 'room_date_conflict');
                     return null;
                 }
             }
 
             $record->status = $record instanceof FoodOrder ? 'paid' : 'confirmed';
-            $record->payment_method = $gateway;
+            $record->payment_method = 'flutterwave';
             $record->paid_at = now();
-            $record->{$idColumn} = $externalId;
+            $record->flutterwave_reference = $reference;
+            $record->flutterwave_transaction_id = $externalId;
             $record->save();
+
+            $attempt->update([
+                'status' => 'confirmed',
+                'provider_transaction_id' => $externalId,
+                'confirmed_at' => now(),
+            ]);
 
             $title = match (true) {
                 $record instanceof Booking => 'Suite Reservation Confirmed',
@@ -529,6 +533,7 @@ class PaymentController extends Controller
                 $record instanceof Order => 'Boutique Order Confirmed',
                 default => 'Concierge Booking Confirmed',
             };
+
             return ['user' => $record->user, 'title' => $title];
         }, 3);
 
@@ -537,10 +542,36 @@ class PaymentController extends Controller
         }
 
         $this->sendConfirmationNotification(
-            $notification['user'], $notification['title'],
+            $notification['user'],
+            $notification['title'],
             'Your payment has been verified and confirmed.'
         );
         return true;
+    }
+
+    protected function flagPaymentForReview(PaymentAttempt $attempt, string $externalId, string $reason): void
+    {
+        // Keep the provider transaction evidence while withholding fulfillment.
+        $attempt->update([
+            'status' => 'needs_review',
+            'provider_transaction_id' => $externalId,
+        ]);
+
+        \App\Models\PaymentReconciliationCase::updateOrCreate(
+            ['payment_reference' => $attempt->reference],
+            [
+                'gateway' => 'flutterwave',
+                'provider_transaction_id' => $externalId,
+                'payable_type' => $attempt->payable_type,
+                'payable_id' => $attempt->payable_id,
+                'reason' => $reason,
+                'status' => 'needs_review',
+            ]
+        );
+        Log::warning('Verified Flutterwave payment requires reconciliation', [
+            'reference' => $attempt->reference,
+            'reason' => $reason,
+        ]);
     }
 
     protected function findRecordByReference(string $reference)
