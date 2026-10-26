@@ -87,10 +87,10 @@ class Room extends Model
     public function activeBooking()
     {
         return $this->hasOne(Booking::class)
+            ->whereNotNull('checked_in_at')
+            ->whereNull('checked_out_at')
             ->whereIn('status', ['confirmed', 'paid', 'active'])
-            ->whereDate('check_in', '<=', now())
-            ->whereDate('check_out', '>=', now())
-            ->latest();
+            ->latest('checked_in_at');
     }
 
     public function stockMovements()
