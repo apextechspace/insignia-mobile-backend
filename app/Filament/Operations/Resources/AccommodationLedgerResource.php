@@ -60,11 +60,12 @@ class AccommodationLedgerResource extends Resource
                         Forms\Components\Select::make('payment_method')
                             ->label('Payment Method')
                             ->options([
-                                'opay'          => 'OPay (In-App)',
+                                'flutterwave'   => 'Flutterwave',
+                        'opay'          => 'OPay (Historical)',
                                 'bank_transfer' => 'Bank Transfer',
                                 'pos'           => 'POS Terminal',
                             ])
-                            ->default('opay')
+                            ->default('bank_transfer')
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('channel')
