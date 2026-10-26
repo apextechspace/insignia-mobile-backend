@@ -94,7 +94,7 @@ class OperationsSeeder extends Seeder
                             'check_in' => Carbon::today()->subDays(1),
                             'check_out' => Carbon::today()->addDays(2),
                             'total_price' => $room->price_per_night * 3,
-                            'payment_method' => 'opay',
+                            'payment_method' => 'flutterwave',
                             'payment_reference' => 'INS-DEMO-' . $room->id,
                             'paid_at' => Carbon::now()->subDays(1),
                         ]
