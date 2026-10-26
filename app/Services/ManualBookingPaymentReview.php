@@ -5,9 +5,6 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Notifications\Notification as BaseNotification;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Validation\ValidationException;
 
 class ManualBookingPaymentReview
@@ -63,12 +60,11 @@ class ManualBookingPaymentReview
                 'updated_at' => now(),
             ]);
             $record->update(['paid_at' => now(), 'payment_method' => 'bank_transfer', 'status' => 'confirmed']);
+            // Database notifications are committed atomically with payment and ledger.
+            $this->notifyBooking($record->id, true);
             return $record->id;
         }, 3);
 
-        if ($confirmed) {
-            $this->notifyBooking($confirmed, true);
-        }
         return (bool) $confirmed;
     }
 
@@ -94,10 +90,9 @@ class ManualBookingPaymentReview
                 'updated_at' => now(),
             ]);
             // Leave the original payable pending for a corrected receipt or alternative payment.
+            $this->notifyBooking($record->id, false);
             return $record->id;
         });
-
-        $this->notifyBooking($bookingId, false);
     }
 
     private function notifyBooking(int $bookingId, bool $approved): void
