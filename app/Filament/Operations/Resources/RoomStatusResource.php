@@ -113,7 +113,7 @@ class RoomStatusResource extends Resource
                     ->label('Start Cleaning')
                     ->icon('heroicon-o-sparkles')
                     ->color('warning')
-                    ->visible(fn(Room $record): bool => in_array($record->status, ['available', 'occupied']))
+                    ->visible(fn(Room $record): bool => $record->status === 'available')
                     ->action(function (Room $record): void {
                         $record->update(['status' => 'cleaning']);
                     }),
