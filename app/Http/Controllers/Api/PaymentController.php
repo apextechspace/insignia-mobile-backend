@@ -19,12 +19,10 @@ use Illuminate\Support\Str;
 class PaymentController extends Controller
 {
     protected FlutterwaveService $flutterwaveService;
-    protected OPayService $opayService;
 
-    public function __construct(FlutterwaveService $flutterwaveService, OPayService $opayService)
+    public function __construct(FlutterwaveService $flutterwaveService)
     {
         $this->flutterwaveService = $flutterwaveService;
-        $this->opayService = $opayService;
     }
 
     /**
