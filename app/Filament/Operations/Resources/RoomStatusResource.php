@@ -34,17 +34,17 @@ class RoomStatusResource extends Resource
                             ->label('Room Name')
                             ->disabled(),
                         Forms\Components\Select::make('status')
-                            ->label('Current Status')
-                            ->options([
-                                'available' => 'Available / Ready',
-                                'occupied'  => 'Occupied',
-                                'cleaning'  => 'Cleaning in Progress',
-                                'maintenance' => 'Under Maintenance',
-                                'reserved'  => 'Reserved',
-                            ])
-                            ->required()
-                            ->native(false),
-                        Forms\Components\Textarea::make('housekeeping_notes')
+                    ->label('Physical Room Status')
+                    ->options([
+                        'available' => 'Available / Ready',
+                        'cleaning' => 'Cleaning In Progress',
+                        'maintenance' => 'Under Maintenance',
+                        'reserved' => 'Reserved',
+                    ])
+                    ->helperText('Occupied is managed by Check In/Check Out. Do not mark a checked-in suite as ready.')
+                    ->required()
+                    ->native(false),
+                Forms\Components\Textarea::make('housekeeping_notes')
                             ->label('Housekeeping Notes')
                             ->rows(3)
                             ->placeholder('Any notes for the next shift...')
