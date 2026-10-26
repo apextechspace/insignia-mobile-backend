@@ -6,6 +6,35 @@ use Illuminate\Database\Eloquent\Model;
 
 class Room extends Model
 {
+    protected static function booted(): void
+    {
+        static::updating(function (Room $room): void {
+            if (!$room->isDirty('status') || $room->status !== 'available'
+                || $room->getOriginal('status') !== 'cleaning') {
+                return;
+            }
+
+            // Fail closed even if an old Filament action attempts to bypass
+            // supervisor release of a checkout-cleaning task.
+            $verified = \App\Models\StaffTask::where('room_id', $room->id)
+                ->where('task_type', 'room_turnaround')
+                ->latest('id')->first();
+
+            if (!$verified || $verified->status !== 'verified') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'room' => 'A supervisor must verify the latest turnaround checklist before this room can be marked ready.',
+                ]);
+            }
+
+            if (\App\Models\Booking::where('room_id', $room->id)
+                ->whereNotNull('checked_in_at')->whereNull('checked_out_at')->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'room' => 'An active checked-in stay prevents releasing this room.',
+                ]);
+            }
+        });
+    }
+
     protected $fillable = [
         'name',
         'type',
