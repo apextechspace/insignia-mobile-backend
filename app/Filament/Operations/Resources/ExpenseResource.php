@@ -221,6 +221,21 @@ class ExpenseResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        if (!Auth::user()?->isIplAdmin()) {
+            $query->where('logged_by', Auth::id() ?? 0);
+        }
+        return $query;
+    }
+
+    public static function canView($record): bool
+    {
+        return Auth::user()?->isIplAdmin()
+            || (Auth::check() && (int) $record->logged_by === (int) Auth::id());
+    }
+
     public static function canEdit($record): bool
     {
         return auth()->user()?->isIplAdmin()
