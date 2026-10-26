@@ -1,0 +1,37 @@
+name: Laravel payment tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - fix/payment-verification-integrity-20261026
+
+jobs:
+  laravel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, bcmath, gd, pdo_sqlite, sqlite3, zip
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Configure isolated testing key
+        run: echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
+
+      - name: Run payment and ledger regression tests
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          QUEUE_CONNECTION: sync
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+        run: php artisan test tests/Feature/FlutterwaveWebhookSecurityTest.php tests/Feature/FlutterwaveTransactionIntegrityTest.php tests/Feature/BookingLedgerIntegrityTest.php
