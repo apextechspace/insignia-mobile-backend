@@ -186,7 +186,7 @@ class PaymentController extends Controller
         }
 
         // If already confirmed in database
-        if ($record->status === 'confirmed' || $record->status === 'paid' || !empty($record->paid_at)) {
+        if (!empty($record->paid_at) && $record->payment_method === 'flutterwave' && $record->flutterwave_reference === $reference) {
             return response()->json([
                 'status'  => 'success',
                 'is_paid' => true,
@@ -409,7 +409,7 @@ class PaymentController extends Controller
 
         $record = $this->findRecordByReference($reference);
         $data = $result['data'] ?? [];
-        if (!$record || ($data['tx_ref'] ?? null) !== $reference || strtoupper((string) ($data['currency'] ?? '')) !== 'NGN') {
+        if (!$record || $record->flutterwave_reference !== $reference || ($data['tx_ref'] ?? null) !== $reference || strtoupper((string) ($data['currency'] ?? '')) !== 'NGN') {
             return false;
         }
 
