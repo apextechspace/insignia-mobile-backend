@@ -14,7 +14,8 @@ class BookingObserver
     public function saved(Booking $booking): void
     {
         // Check if booking is confirmed or paid
-        $isPaid = in_array(strtolower($booking->status), ['confirmed', 'paid']) || !empty($booking->paid_at);
+        // A booking status alone is not proof that the money was received.
+        $isPaid = !empty($booking->paid_at) && in_array(strtolower((string) $booking->status), ['confirmed', 'paid', 'completed'], true);
 
         if ($isPaid) {
             $existingLedger = AccommodationLedger::where('booking_id', $booking->id)
@@ -22,8 +23,7 @@ class BookingObserver
                 ->first();
 
             if (!$existingLedger) {
-                try {
-                    AccommodationLedger::create([
+                AccommodationLedger::create([
                         'booking_id' => $booking->id,
                         'room_id' => $booking->room_id,
                         'reference' => 'ACCOM-' . ($booking->payment_reference ?: 'BK' . $booking->id . '-' . time()),
@@ -38,15 +38,10 @@ class BookingObserver
                         'notes' => 'Automated split-ledger entry from Mobile App Booking #' . $booking->id,
                         'created_by' => $booking->user_id,
                     ]);
-                } catch (\Throwable $e) {
-                    Log::error('Failed to create split-ledger entry for booking #' . $booking->id, [
-                        'error' => $e->getMessage(),
-                    ]);
-                }
             }
         }
 
-        $isCancelledOrRefunded = in_array(strtolower((string) $booking->status), ['cancelled', 'refunded']);
+        $isCancelledOrRefunded = in_array(strtolower((string) $booking->status), ['refunded']);
 
         if ($isCancelledOrRefunded) {
             $hasRevenueEntry = AccommodationLedger::where('booking_id', $booking->id)
@@ -58,8 +53,7 @@ class BookingObserver
                 ->exists();
 
             if ($hasRevenueEntry && !$existingRefund) {
-                try {
-                    AccommodationLedger::create([
+                AccommodationLedger::create([
                         'booking_id' => $booking->id,
                         'room_id' => $booking->room_id,
                         'reference' => 'REF-' . ($booking->payment_reference ?: 'BK' . $booking->id . '-' . time()),
@@ -74,11 +68,6 @@ class BookingObserver
                         'notes' => 'Automated reversal/refund entry for cancelled/refunded Booking #' . $booking->id,
                         'created_by' => $booking->user_id,
                     ]);
-                } catch (\Throwable $e) {
-                    Log::error('Failed to create split-ledger refund reversal for booking #' . $booking->id, [
-                        'error' => $e->getMessage(),
-                    ]);
-                }
             }
         }
     }
