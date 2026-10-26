@@ -67,6 +67,9 @@ class StayOperationsService
 
             $stay->forceFill(['checked_out_at' => now(), 'status' => 'completed'])->save();
             $room->update(['status' => 'cleaning']);
+            // Generate a new checklist for every real guest departure.
+            // This happens in the same transaction as check-out.
+            app(RoomTurnoverService::class)->createForCheckout($room);
         }, 3);
     }
 }
