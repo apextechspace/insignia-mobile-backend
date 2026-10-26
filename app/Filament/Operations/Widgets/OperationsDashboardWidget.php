@@ -35,6 +35,20 @@ class OperationsDashboardWidget extends Widget
             ->whereIn('status', ['confirmed', 'paid', 'completed'])
             ->count();
 
+        // Bookings and physical housekeeping state are distinct. All panels
+        // query the same booking records, including receipt-pending bookings.
+        $pendingReservations = Booking::with(['room', 'user'])
+            ->where('status', 'pending')
+            ->orderBy('check_in')
+            ->limit(12)->get();
+
+        $upcomingReservations = Booking::with(['room', 'user'])
+            ->whereIn('status', ['confirmed', 'paid'])
+            ->whereNotNull('paid_at')
+            ->whereDate('check_in', '>=', today())
+            ->orderBy('check_in')
+            ->limit(12)->get();
+
         $openIncidents = Incident::whereNotIn('status', ['resolved', 'closed'])->count();
         $pendingTasks  = StaffTask::whereIn('status', ['pending', 'in_progress'])->count();
 
@@ -49,6 +63,8 @@ class OperationsDashboardWidget extends Widget
             'openIncidents'   => $openIncidents,
             'pendingTasks'    => $pendingTasks,
             'user'            => $user,
+            'pendingReservations' => $pendingReservations,
+            'upcomingReservations' => $upcomingReservations,
         ];
     }
 }
