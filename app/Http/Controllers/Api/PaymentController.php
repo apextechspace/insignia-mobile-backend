@@ -151,11 +151,9 @@ class PaymentController extends Controller
             // Confirm transaction integrity with Flutterwave API
             if ($transactionId) {
                 $verification = $this->flutterwaveService->verifyTransaction($transactionId);
-                if ($verification['success'] && in_array($verification['status'], ['SUCCESSFUL', 'SUCCESS', 'COMPLETED'])) {
+                if ($this->isVerifiedPayment($verification, $txRef)) {
                     $this->markOrderAsPaid($txRef, (string) $transactionId, 'flutterwave');
                 }
-            } else {
-                $this->markOrderAsPaid($txRef, null, 'flutterwave');
             }
         }
 
@@ -176,6 +174,10 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Transaction not found.'], 404);
         }
 
+        if ((int) $record->user_id !== (int) auth()->id()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         // If already confirmed in database
         if ($record->status === 'confirmed' || $record->status === 'paid' || !empty($record->paid_at)) {
             return response()->json([
@@ -188,7 +190,7 @@ class PaymentController extends Controller
         // Otherwise query Flutterwave API by reference
         $flwStatus = $this->flutterwaveService->verifyByReference($reference);
 
-        if ($flwStatus['success'] && in_array($flwStatus['status'], ['SUCCESSFUL', 'SUCCESS', 'COMPLETED'])) {
+        if ($this->isVerifiedPayment($flwStatus, $reference)) {
             $transId = (string) ($flwStatus['data']['id'] ?? '');
             $this->markOrderAsPaid($reference, $transId, 'flutterwave');
             $record->refresh();
@@ -390,6 +392,23 @@ class PaymentController extends Controller
             'is_paid' => false,
             'record'  => $record,
         ]);
+    }
+
+    protected function isVerifiedPayment(array $result, string $reference): bool
+    {
+        if (empty($result['success']) || strtoupper((string) ($result['status'] ?? '')) !== 'SUCCESSFUL') {
+            return false;
+        }
+
+        $record = $this->findRecordByReference($reference);
+        $data = $result['data'] ?? [];
+        if (!$record || ($data['tx_ref'] ?? null) !== $reference || strtoupper((string) ($data['currency'] ?? '')) !== 'NGN') {
+            return false;
+        }
+
+        $expected = $record instanceof FoodOrder ? $record->total_amount : $record->total_price;
+        return is_numeric($expected) && is_numeric($data['amount'] ?? null)
+            && (int) round(((float) $expected) * 100) === (int) round(((float) $data['amount']) * 100);
     }
 
     /**
