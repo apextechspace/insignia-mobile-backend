@@ -10,6 +10,21 @@ class EditOrder extends EditRecord
 {
     protected static string $resource = OrderResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // A manual edit must not turn an unpaid order into a fulfilled one.
+        // Payment approval is performed exclusively by the verified gateway
+        // or an authorized, audited manual payment action.
+        if (empty($this->record->paid_at)
+            && in_array($data['status'] ?? $this->record->status, ['processing','shipped','delivered'], true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'status' => 'Verify payment before progressing this transaction.',
+            ]);
+        }
+
+        return $data;
+    }
+
     protected function getHeaderActions(): array
     {
         return [
