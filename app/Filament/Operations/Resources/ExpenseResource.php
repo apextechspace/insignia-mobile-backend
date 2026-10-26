@@ -221,6 +221,18 @@ class ExpenseResource extends Resource
         ];
     }
 
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->isIplAdmin()
+            || ((int) $record->logged_by === (int) auth()->id()
+                && $record->status === 'pending_approval');
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->isIplAdmin() ?? false;
+    }
+
     public static function canViewAny(): bool
     {
         $user = Auth::user();
