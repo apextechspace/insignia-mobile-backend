@@ -40,11 +40,20 @@ class UserResource extends Resource
                             ->maxLength(255),
                         Forms\Components\Select::make('role')
                             ->options([
-                                'admin' => 'Administrator',
-                                'guest' => 'Executive Guest',
+                                User::ROLE_ADMIN => 'System Super Admin',
+                                User::ROLE_IPL_ADMIN => 'IPL Property Owner (Master)',
+                                User::ROLE_DELIVERY_PARTNER => 'MCL Facility Manager',
+                                User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
+                                User::ROLE_STAFF => 'Housekeeping / Ops Staff',
+                                User::ROLE_USER => 'Executive Guest',
                             ])
                             ->required()
-                            ->default('guest'),
+                            ->default(User::ROLE_USER),
+                        Forms\Components\TextInput::make('password')
+                            ->password()
+                            ->dehydrated(fn ($state) => filled($state))
+                            ->required(fn (string $context): bool => $context === 'create')
+                            ->maxLength(255),
                         Forms\Components\TextInput::make('phone')
                             ->tel()
                             ->maxLength(255),
@@ -83,9 +92,20 @@ class UserResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('role')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        User::ROLE_ADMIN => 'Super Admin',
+                        User::ROLE_IPL_ADMIN => 'IPL Owner',
+                        User::ROLE_DELIVERY_PARTNER => 'MCL Manager',
+                        User::ROLE_GUEST_RELATIONS => 'Front Desk',
+                        User::ROLE_STAFF => 'Housekeeping / Staff',
+                        User::ROLE_USER, 'guest' => 'Guest',
+                        default => ucfirst($state),
+                    })
                     ->color(fn (string $state): string => match ($state) {
-                        'admin' => 'danger',
-                        'guest' => 'success',
+                        User::ROLE_ADMIN, User::ROLE_IPL_ADMIN => 'danger',
+                        User::ROLE_DELIVERY_PARTNER => 'warning',
+                        User::ROLE_GUEST_RELATIONS => 'info',
+                        User::ROLE_STAFF => 'success',
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('phone')
@@ -98,8 +118,12 @@ class UserResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('role')
                     ->options([
-                        'admin' => 'Administrator',
-                        'guest' => 'Executive Guest',
+                        User::ROLE_ADMIN => 'System Super Admin',
+                        User::ROLE_IPL_ADMIN => 'IPL Property Owner',
+                        User::ROLE_DELIVERY_PARTNER => 'MCL Facility Manager',
+                        User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
+                        User::ROLE_STAFF => 'Housekeeping / Ops Staff',
+                        User::ROLE_USER => 'Executive Guest',
                     ]),
             ])
             ->actions([

@@ -27,22 +27,29 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->brandName('Insignia Residences')
-            ->brandLogo(null) // Can add a logo later if they provide one
+            ->brandName('Insignia Residences Management')
+            ->brandLogo(fn () => asset('images/logo-trimmed.png'))
+            ->darkModeBrandLogo(fn () => asset('images/logo-white.png'))
+            ->brandLogoHeight('3.5rem')
+            ->favicon(fn () => asset('images/logo-trimmed.png'))
+            ->font('Plus Jakarta Sans')
+            ->darkMode(true)
+            ->sidebarCollapsibleOnDesktop()
             ->colors([
                 'primary' => [
-                    50 => '247, 241, 245',
-                    100 => '239, 227, 235',
-                    200 => '223, 199, 215',
-                    300 => '207, 171, 195',
-                    400 => '175, 115, 155',
-                    500 => '143, 59, 115',
-                    600 => '129, 53, 104',
-                    700 => '107, 44, 86',
-                    800 => '86, 35, 69',
-                    900 => '75, 29, 63', // #4B1D3F
-                    950 => '50, 20, 42',
+                    50  => '252, 245, 248',
+                    100 => '246, 230, 238',
+                    200 => '236, 204, 221',
+                    300 => '221, 168, 198',
+                    400 => '197, 116, 163',
+                    500 => '168, 71, 129',
+                    600 => '138, 44, 99',
+                    700 => '111, 29, 76',
+                    800 => '90, 20, 59',
+                    900 => '74, 14, 46', // #4A0E2E - Rich Insignia Plum
+                    950 => '46, 5, 26',
                 ],
+                'gray' => Color::Slate,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')

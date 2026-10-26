@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
             RoomSeeder::class,
             ServiceSeeder::class,
             ProductSeeder::class,
+            OperationsSeeder::class,
         ]);
     }
 }

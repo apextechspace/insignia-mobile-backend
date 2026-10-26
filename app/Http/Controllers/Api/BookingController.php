@@ -26,15 +26,21 @@ class BookingController extends Controller
             $receiptUrl = $path;
         }
 
-        // 🚨 CRITICAL: Check for overlapping bookings
+        // Clear previous uncompleted pending bookings from this user for this room so they can retry
+        Booking::where('user_id', $request->user()->id)
+            ->where('room_id', $validated['room_id'])
+            ->where('status', 'pending')
+            ->delete();
+
+        // 🚨 CRITICAL: Check for overlapping confirmed stays
         $overlap = Booking::where('room_id', $validated['room_id'])
-            ->where('status', '!=', 'cancelled')
+            ->whereIn('status', ['confirmed', 'completed'])
             ->where('check_in', '<', $validated['check_out'])
             ->where('check_out', '>', $validated['check_in'])
             ->exists();
 
         if ($overlap) {
-            return response()->json(['message' => 'This room is already booked for the selected dates.'], 422);
+            return response()->json(['message' => 'This room is already confirmed for another guest on the selected dates.'], 422);
         }
 
         $room = Room::findOrFail($validated['room_id']);

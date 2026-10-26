@@ -98,6 +98,17 @@ class BookingResource extends Resource
                         'cancelled' => 'danger',
                         default => 'gray',
                     }),
+                Tables\Columns\TextColumn::make('payment_method')
+                    ->label('Payment')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'opay' => '⚡ OPay Verified',
+                        default => '🏦 Bank Transfer',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        'opay' => 'success',
+                        default => 'warning',
+                    }),
                 Tables\Columns\ImageColumn::make('receipt_url')
                     ->label('Receipt')
                     ->disk('public')

@@ -5,7 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "serve": "C:\\xampp\\php\\php.exe artisan serve --host=192.168.1.121"
+        "serve": "C:\\xampp\\php\\php.exe artisan serve --host=192.168.8.199"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

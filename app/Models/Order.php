@@ -16,6 +16,12 @@ class Order extends Model
         'payment_reference',
         'receipt_url',
         'delivery_location',
+        'payment_method',
+        'opay_reference',
+        'opay_order_id',
+        'flutterwave_reference',
+        'flutterwave_transaction_id',
+        'paid_at',
     ];
 
     public function user()

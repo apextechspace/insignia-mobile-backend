@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class MaintenanceRequest extends Model
 {
     protected $fillable = [
-        'user_id', 'category', 'title', 'description',
+        'user_id', 'asset_id', 'category', 'title', 'description',
         'priority', 'status', 'admin_notes', 'resolved_at',
     ];
 
@@ -18,5 +18,10 @@ class MaintenanceRequest extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function asset()
+    {
+        return $this->belongsTo(Asset::class);
     }
 }

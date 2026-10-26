@@ -16,9 +16,52 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_IPL_ADMIN = 'ipl_admin';
+    public const ROLE_DELIVERY_PARTNER = 'delivery_partner';
+    public const ROLE_GUEST_RELATIONS = 'guest_relations';
+    public const ROLE_STAFF = 'staff';
+    public const ROLE_USER = 'user';
+
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->role === 'admin';
+        if ($panel->getId() === 'admin') {
+            // Door 1 (Owner's Portal): Only IPL Master Admins
+            return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_IPL_ADMIN]);
+        }
+
+        if ($panel->getId() === 'operations') {
+            // Door 2 (Facility Portal): Delivery Partner (MCL), Front Desk, Staff, or Super Admin
+            return in_array($this->role, [
+                self::ROLE_ADMIN,
+                self::ROLE_IPL_ADMIN,
+                self::ROLE_DELIVERY_PARTNER,
+                self::ROLE_GUEST_RELATIONS,
+                self::ROLE_STAFF,
+            ]);
+        }
+
+        return false;
+    }
+
+    public function isIplAdmin(): bool
+    {
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_IPL_ADMIN]);
+    }
+
+    public function isDeliveryPartner(): bool
+    {
+        return $this->role === self::ROLE_DELIVERY_PARTNER;
+    }
+
+    public function isGuestRelations(): bool
+    {
+        return $this->role === self::ROLE_GUEST_RELATIONS;
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role === self::ROLE_STAFF;
     }
 
     /**
@@ -91,5 +134,45 @@ class User extends Authenticatable implements FilamentUser
     public function maintenanceRequests()
     {
         return $this->hasMany(MaintenanceRequest::class);
+    }
+
+    public function expenses()
+    {
+        return $this->hasMany(Expense::class, 'logged_by');
+    }
+
+    public function pettyCashTransactions()
+    {
+        return $this->hasMany(PettyCashTransaction::class, 'handled_by');
+    }
+
+    public function dailyReconciliations()
+    {
+        return $this->hasMany(DailyReconciliation::class, 'submitted_by');
+    }
+
+    public function monthlyStatements()
+    {
+        return $this->hasMany(MonthlyStatement::class, 'submitted_by');
+    }
+
+    public function staffShifts()
+    {
+        return $this->hasMany(StaffShift::class);
+    }
+
+    public function staffTasks()
+    {
+        return $this->hasMany(StaffTask::class);
+    }
+
+    public function reportedIncidents()
+    {
+        return $this->hasMany(Incident::class, 'reported_by');
+    }
+
+    public function assignedIncidents()
+    {
+        return $this->hasMany(Incident::class, 'assigned_to');
     }
 }

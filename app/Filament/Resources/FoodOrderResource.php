@@ -64,6 +64,17 @@ class FoodOrderResource extends Resource
                     ])
                     ->sortable(),
                 Tables\Columns\TextColumn::make('type')->sortable(),
+                Tables\Columns\TextColumn::make('payment_method')
+                    ->label('Payment')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'opay' => '⚡ OPay Verified',
+                        default => '🏦 Bank Transfer',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        'opay' => 'success',
+                        default => 'warning',
+                    }),
                 Tables\Columns\TextColumn::make('payment_reference')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),

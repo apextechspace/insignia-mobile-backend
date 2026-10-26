@@ -90,6 +90,17 @@ class OrderResource extends Resource
                         default => 'gray',
                     })
                     ->sortable(),
+                Tables\Columns\TextColumn::make('payment_method')
+                    ->label('Payment')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'opay' => '⚡ OPay Verified',
+                        default => '🏦 Bank Transfer',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        'opay' => 'success',
+                        default => 'warning',
+                    }),
                 Tables\Columns\TextColumn::make('delivery_location')
                     ->label('Room / Delivery')
                     ->searchable()

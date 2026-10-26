@@ -62,7 +62,24 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/guests', [App\Http\Controllers\Api\ApartmentController::class, 'registerGuest']);
     Route::get('/maintenance', [App\Http\Controllers\Api\ApartmentController::class, 'listMaintenance']);
     Route::post('/maintenance', [App\Http\Controllers\Api\ApartmentController::class, 'submitMaintenance']);
+
+    // Flutterwave & Online Payment Gateway Integration
+    Route::post('/payments/initialize', [App\Http\Controllers\Api\PaymentController::class, 'initializeFlutterwave']);
+    Route::get('/payments/verify/{reference}', [App\Http\Controllers\Api\PaymentController::class, 'verifyFlutterwave']);
+    Route::post('/payments/flutterwave/initialize', [App\Http\Controllers\Api\PaymentController::class, 'initializeFlutterwave']);
+    Route::get('/payments/flutterwave/verify/{reference}', [App\Http\Controllers\Api\PaymentController::class, 'verifyFlutterwave']);
+
+    // Legacy OPay Gateway Compatibility Routes
+    Route::post('/payments/opay/initialize', [App\Http\Controllers\Api\PaymentController::class, 'initializeOPay']);
+    Route::get('/payments/opay/verify/{reference}', [App\Http\Controllers\Api\PaymentController::class, 'verifyOPay']);
 });
+
+// Flutterwave Server-to-Server Webhook (Public Callback)
+Route::post('/payments/flutterwave/webhook', [App\Http\Controllers\Api\PaymentController::class, 'webhookFlutterwave']);
+Route::post('/payments/webhook/flutterwave', [App\Http\Controllers\Api\PaymentController::class, 'webhookFlutterwave']);
+
+// Legacy OPay Webhook
+Route::post('/payments/opay/webhook', [App\Http\Controllers\Api\PaymentController::class, 'webhook']);
 
 // Public access for guests (optional, depending on requirements)
 Route::get('/rooms-public', [RoomController::class, 'index']);
