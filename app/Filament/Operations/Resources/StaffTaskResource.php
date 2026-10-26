@@ -76,7 +76,8 @@ class StaffTaskResource extends Resource
                                 'pending'     => 'Pending',
                                 'in_progress' => 'In Progress',
                                 'completed'   => 'Completed',
-                                'verified'    => 'Verified',
+                                // Verification and room release are supervisor-only actions.
+
                             ])
                             ->default('pending')
                             ->native(false),
