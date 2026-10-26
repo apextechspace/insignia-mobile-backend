@@ -12,6 +12,8 @@ use App\Services\OPayService;
 use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
@@ -80,7 +82,11 @@ class PaymentController extends Controller
 
         // Generate distinct reference
         $prefix = strtoupper(substr($orderType, 0, 4));
-        $reference = "INS-FLW-{$prefix}-{$record->id}-" . time();
+        $reference = "INS-FLW-{$prefix}-{$record->id}-" . Str::uuid();
+
+        if (!empty($record->paid_at) || in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+            return response()->json(['status' => 'error', 'message' => 'This transaction is no longer payable.'], 409);
+        }
 
         // Update record with reference and payment method
         $record->update([
@@ -193,12 +199,12 @@ class PaymentController extends Controller
 
         if ($this->isVerifiedPayment($flwStatus, $reference)) {
             $transId = (string) ($flwStatus['data']['id'] ?? '');
-            $this->markOrderAsPaid($reference, $transId, 'flutterwave');
+            $confirmed = $this->markOrderAsPaid($reference, $transId, 'flutterwave');
             $record->refresh();
 
             return response()->json([
-                'status'  => 'success',
-                'is_paid' => true,
+                'status'  => $confirmed || !empty($record->paid_at) ? 'success' : 'pending',
+                'is_paid' => $confirmed || !empty($record->paid_at),
                 'record'  => $record,
             ]);
         }
@@ -413,93 +419,89 @@ class PaymentController extends Controller
     }
 
     /**
-     * Mark matched record as paid and dispatch push notification
+     * Confirm once after provider verification, with row locks and no duplicate notification.
      */
-    protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave')
+    protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave'): bool
     {
-        $updateData = [
-            'status'         => 'confirmed',
-            'payment_method' => $gateway,
-            'paid_at'        => now(),
-        ];
+        if ($gateway === 'flutterwave' && !$externalId) {
+            return false;
+        }
 
-        if ($gateway === 'flutterwave') {
-            $updateData['flutterwave_reference'] = $reference;
-            if ($externalId) {
-                $updateData['flutterwave_transaction_id'] = $externalId;
+        $notification = DB::transaction(function () use ($reference, $externalId, $gateway) {
+            $model = $this->findRecordByReference($reference);
+            if (!$model) {
+                return null;
             }
-        } else {
-            $updateData['opay_reference'] = $reference;
-            if ($externalId) {
-                $updateData['opay_order_id'] = $externalId;
+
+            if ($model instanceof Booking) {
+                // Serialize payment confirmations for competing stays in the same suite.
+                \App\Models\Room::whereKey($model->room_id)->lockForUpdate()->firstOrFail();
             }
+
+            $record = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
+            $referenceColumn = $gateway === 'flutterwave' ? 'flutterwave_reference' : 'opay_reference';
+            $idColumn = $gateway === 'flutterwave' ? 'flutterwave_transaction_id' : 'opay_order_id';
+
+            if ($record->{$referenceColumn} !== $reference || !empty($record->paid_at)) {
+                return null;
+            }
+            if (in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+                Log::warning('Payment for inactive record needs reconciliation', ['reference' => $reference]);
+                return null;
+            }
+
+            if ($externalId) {
+                foreach ([Booking::class, Order::class, FoodOrder::class, ServiceBooking::class] as $type) {
+                    $query = $type::where($idColumn, $externalId);
+                    if ($type === get_class($record)) {
+                        $query->whereKeyNot($record->getKey());
+                    }
+                    if ($query->exists()) {
+                        Log::warning('Gateway transaction ID has already been assigned', ['reference' => $reference]);
+                        return null;
+                    }
+                }
+            }
+
+            if ($record instanceof Booking) {
+                $conflict = Booking::where('room_id', $record->room_id)
+                    ->whereKeyNot($record->getKey())
+                    ->whereIn('status', ['confirmed', 'paid', 'completed'])
+                    ->where('check_in', '<', $record->check_out)
+                    ->where('check_out', '>', $record->check_in)
+                    ->exists();
+                if ($conflict) {
+                    Log::error('Paid reservation date conflict requires reconciliation', [
+                        'booking_id' => $record->id, 'reference' => $reference,
+                    ]);
+                    return null;
+                }
+            }
+
+            $record->status = $record instanceof FoodOrder ? 'paid' : 'confirmed';
+            $record->payment_method = $gateway;
+            $record->paid_at = now();
+            $record->{$idColumn} = $externalId;
+            $record->save();
+
+            $title = match (true) {
+                $record instanceof Booking => 'Suite Reservation Confirmed',
+                $record instanceof FoodOrder => 'Dining Order Confirmed',
+                $record instanceof Order => 'Boutique Order Confirmed',
+                default => 'Concierge Booking Confirmed',
+            };
+            return ['user' => $record->user, 'title' => $title];
+        }, 3);
+
+        if (!$notification) {
+            return false;
         }
 
-        // 1. Try Booking
-        $booking = Booking::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($booking) {
-            $booking->update($updateData);
-            $this->sendConfirmationNotification(
-                $booking->user,
-                '🏨 Suite Reservation Confirmed',
-                "Your suite reservation has been verified and confirmed via " . ucfirst($gateway) . "."
-            );
-            return;
-        }
-
-        // 2. Try Boutique Order
-        $order = Order::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($order) {
-            $order->update($updateData);
-            $this->sendConfirmationNotification(
-                $order->user,
-                '🛍️ Order Confirmed',
-                "Your boutique purchase was paid via " . ucfirst($gateway) . " and is being prepared."
-            );
-            return;
-        }
-
-        // 3. Try Food Order
-        $foodOrder = FoodOrder::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($foodOrder) {
-            $foodUpdateData = $updateData;
-            $foodUpdateData['status'] = 'paid';
-            $foodOrder->update($foodUpdateData);
-            $this->sendConfirmationNotification(
-                $foodOrder->user,
-                '🍽️ Dining Order Confirmed',
-                'Your dining order has been received by the kitchen.'
-            );
-            return;
-        }
-
-        // 4. Try Service Booking
-        $serviceBooking = ServiceBooking::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($serviceBooking) {
-            $serviceBooking->update($updateData);
-            $this->sendConfirmationNotification(
-                $serviceBooking->user,
-                '✨ Concierge Booking Confirmed',
-                "Your service appointment has been confirmed via " . ucfirst($gateway) . "."
-            );
-            return;
-        }
+        $this->sendConfirmationNotification(
+            $notification['user'], $notification['title'],
+            'Your payment has been verified and confirmed.'
+        );
+        return true;
     }
 
     protected function findRecordByReference(string $reference)
