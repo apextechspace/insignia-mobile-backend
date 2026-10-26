@@ -204,6 +204,21 @@ class StaffTaskResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        if (Auth::user()?->isStaff()) {
+            $query->where('user_id', Auth::id());
+        }
+        return $query;
+    }
+
+    public static function canView($record): bool
+    {
+        return Auth::check() && (!Auth::user()->isStaff()
+            || (int) $record->user_id === (int) Auth::id());
+    }
+
     public static function canCreate(): bool
     {
         return Auth::check() && !Auth::user()->isStaff();
