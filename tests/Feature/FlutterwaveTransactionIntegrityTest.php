@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AccommodationLedger;
 use App\Models\Booking;
+use App\Models\PaymentAttempt;
 use App\Models\Room;
 use App\Models\User;
 use App\Services\FlutterwaveService;
@@ -34,7 +35,7 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
             'status' => 'available',
         ]);
 
-        return Booking::create([
+        $booking = Booking::create([
             'user_id' => $user->id,
             'room_id' => $room->id,
             'check_in' => now()->addDays(10)->toDateString(),
@@ -44,6 +45,16 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
             'payment_method' => 'flutterwave',
             'flutterwave_reference' => $reference,
         ]);
+        PaymentAttempt::create([
+            'gateway' => 'flutterwave',
+            'reference' => $reference,
+            'payable_type' => Booking::class,
+            'payable_id' => $booking->id,
+            'amount' => 100000,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+        ]);
+        return $booking;
     }
 
     private function webhook(FlutterwaveService $service, string $reference = self::REFERENCE): void
@@ -92,6 +103,11 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
         $this->assertNotNull($booking->paid_at);
         $this->assertSame(1, AccommodationLedger::where('booking_id', $booking->id)
             ->where('type', 'revenue')->count());
+        $this->assertDatabaseHas('payment_attempts', [
+            'reference' => self::REFERENCE,
+            'status' => 'confirmed',
+            'provider_transaction_id' => '5151',
+        ]);
     }
 
     public function test_wrong_amount_never_confirms_booking(): void
@@ -156,6 +172,63 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
         $this->assertDatabaseHas('payment_reconciliation_cases', [
             'payment_reference' => self::REFERENCE,
             'reason' => 'room_date_conflict',
+            'status' => 'needs_review',
+        ]);
+    }
+
+    public function test_old_checkout_reference_still_confirms_after_new_retry(): void
+    {
+        $booking = $this->makeBooking();
+        $booking->update(['flutterwave_reference' => 'INS-FLW-BOOK-1-second-attempt']);
+
+        PaymentAttempt::create([
+            'gateway' => 'flutterwave',
+            'reference' => 'INS-FLW-BOOK-1-second-attempt',
+            'payable_type' => Booking::class,
+            'payable_id' => $booking->id,
+            'amount' => 100000,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+        ]);
+
+        $service = Mockery::mock(FlutterwaveService::class);
+        $this->webhook($service);
+        $service->shouldReceive('verifyTransaction')->once()->with(5151)
+            ->andReturn($this->verified());
+
+        $this->sendWebhook()->assertOk();
+
+        $this->assertSame('confirmed', $booking->fresh()->status);
+        $this->assertSame(self::REFERENCE, $booking->fresh()->flutterwave_reference);
+        $this->assertDatabaseHas('payment_attempts', [
+            'reference' => self::REFERENCE,
+            'status' => 'confirmed',
+        ]);
+        $this->assertDatabaseHas('payment_attempts', [
+            'reference' => 'INS-FLW-BOOK-1-second-attempt',
+            'status' => 'initiated',
+        ]);
+    }
+
+    public function test_second_successful_payment_is_flagged_for_reconciliation(): void
+    {
+        $booking = $this->makeBooking();
+        $booking->update([
+            'status' => 'confirmed',
+            'paid_at' => now(),
+            'flutterwave_transaction_id' => '4000',
+        ]);
+
+        $service = Mockery::mock(FlutterwaveService::class);
+        $this->webhook($service);
+        $service->shouldReceive('verifyTransaction')->once()->with(5151)
+            ->andReturn($this->verified());
+
+        $this->sendWebhook()->assertOk();
+
+        $this->assertDatabaseHas('payment_reconciliation_cases', [
+            'payment_reference' => self::REFERENCE,
+            'reason' => 'already_paid_other_attempt',
             'status' => 'needs_review',
         ]);
     }
