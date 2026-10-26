@@ -67,13 +67,12 @@ class RoomTurnoverTest extends TestCase
         $this->assertSame('verified', $task->fresh()->status);
     }
 
-    public function test_incomplete_checklist_cannot_release_room(): void
+    public function test_incomplete_checklist_cannot_be_marked_completed(): void
     {
-        [$room, $operator] = $this->checkedOutRoom();
-        StaffTask::where('room_id', $room->id)->firstOrFail()
-            ->update(['status' => 'completed', 'completed_at' => now()]);
+        [$room] = $this->checkedOutRoom();
+        $task = StaffTask::where('room_id', $room->id)->firstOrFail();
         $this->expectException(ValidationException::class);
-        app(RoomTurnoverService::class)->markReady($room, $operator);
+        $task->update(['status' => 'completed']);
     }
 
     public function test_unprivileged_staff_cannot_verify_cleaning(): void
