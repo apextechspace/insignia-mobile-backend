@@ -138,7 +138,7 @@ class PaymentController extends Controller
         }
 
         $payload = $request->all();
-        Log::info('Flutterwave Webhook Received:', $payload);
+        Log::info('Flutterwave webhook received', ['event' => $payload['event'] ?? null]);
 
         $event = $payload['event'] ?? '';
         $data = $payload['data'] ?? [];
@@ -151,7 +151,8 @@ class PaymentController extends Controller
             // Confirm transaction integrity with Flutterwave API
             if ($transactionId) {
                 $verification = $this->flutterwaveService->verifyTransaction($transactionId);
-                if ($this->isVerifiedPayment($verification, $txRef)) {
+                if ($this->isVerifiedPayment($verification, $txRef)
+                    && (string) ($verification['data']['id'] ?? '') === (string) $transactionId) {
                     $this->markOrderAsPaid($txRef, (string) $transactionId, 'flutterwave');
                 }
             }
