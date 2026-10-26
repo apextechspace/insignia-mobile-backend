@@ -66,7 +66,7 @@ class FlutterwaveService
         ]);
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
@@ -117,7 +117,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/{$transactionId}/verify";
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
@@ -160,7 +160,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/verify_by_reference";
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
