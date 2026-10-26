@@ -177,6 +177,21 @@ class AccommodationLedgerResource extends Resource
         ]);
     }
 
+    public static function canEdit($record): bool
+    {
+        return Auth::user()?->isIplAdmin() ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
     public static function canCreate(): bool
     {
         return Auth::user()?->isIplAdmin();
