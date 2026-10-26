@@ -136,6 +136,44 @@
             </div>
         </div>
 
+        {{-- Booking records are separate from physical occupied/cleaning status. --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+                <h2 class="font-bold text-lg text-gray-900 dark:text-white">Pending Room Bookings ({{ $pendingReservations->count() }})</h2>
+                <p class="text-xs text-gray-500 mt-1">Received bookings awaiting payment verification; not confirmed stays.</p>
+                <div class="mt-4 space-y-3">
+                    @forelse($pendingReservations as $booking)
+                        <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                            </div>
+                            <span class="text-xs text-amber-600 font-semibold whitespace-nowrap">Pending review</span>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500">No pending room bookings.</p>
+                    @endforelse
+                </div>
+            </section>
+            <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+                <h2 class="font-bold text-lg text-gray-900 dark:text-white">Upcoming Confirmed Stays ({{ $upcomingReservations->count() }})</h2>
+                <p class="text-xs text-gray-500 mt-1">Paid reservations that require upcoming front-desk preparation.</p>
+                <div class="mt-4 space-y-3">
+                    @forelse($upcomingReservations as $booking)
+                        <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                            </div>
+                            <span class="text-xs text-emerald-600 font-semibold whitespace-nowrap">Confirmed</span>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500">No upcoming confirmed stays.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
+
         {{-- ============================================================ --}}
         {{-- 6-APARTMENT VISUAL STATUS GRID --}}
         {{-- ============================================================ --}}
