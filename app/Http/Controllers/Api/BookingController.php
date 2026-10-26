@@ -26,12 +26,8 @@ class BookingController extends Controller
             $receiptUrl = $path;
         }
 
-        // Clear previous uncompleted pending bookings from this user for this room so they can retry
-        Booking::where('user_id', $request->user()->id)
-            ->where('room_id', $validated['room_id'])
-            ->where('status', 'pending')
-            ->delete();
-
+        // Never delete prior pending bookings: they may contain manual receipts
+        // or Flutterwave attempts which arrive after a retry.
         // 🚨 CRITICAL: Check for overlapping confirmed stays
         $overlap = Booking::where('room_id', $validated['room_id'])
             ->whereIn('status', ['confirmed', 'completed'])
