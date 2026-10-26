@@ -446,6 +446,17 @@ class PaymentController extends Controller
                 return null;
             }
             if (in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+                \App\Models\PaymentReconciliationCase::updateOrCreate(
+                    ['payment_reference' => $reference],
+                    [
+                        'gateway' => $gateway,
+                        'provider_transaction_id' => $externalId,
+                        'payable_type' => get_class($record),
+                        'payable_id' => $record->getKey(),
+                        'reason' => 'payable_inactive',
+                        'status' => 'needs_review',
+                    ]
+                );
                 Log::warning('Payment for inactive record needs reconciliation', ['reference' => $reference]);
                 return null;
             }
@@ -471,6 +482,17 @@ class PaymentController extends Controller
                     ->where('check_out', '>', $record->check_in)
                     ->exists();
                 if ($conflict) {
+                    \App\Models\PaymentReconciliationCase::updateOrCreate(
+                        ['payment_reference' => $reference],
+                        [
+                            'gateway' => $gateway,
+                            'provider_transaction_id' => $externalId,
+                            'payable_type' => get_class($record),
+                            'payable_id' => $record->getKey(),
+                            'reason' => 'room_date_conflict',
+                            'status' => 'needs_review',
+                        ]
+                    );
                     Log::error('Paid reservation date conflict requires reconciliation', [
                         'booking_id' => $record->id, 'reference' => $reference,
                     ]);
