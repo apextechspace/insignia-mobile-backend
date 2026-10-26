@@ -14,9 +14,9 @@ class FlutterwaveService
 
     public function __construct()
     {
-        $this->publicKey  = config('services.flutterwave.public_key', env('FLW_PUBLIC_KEY', ''));
-        $this->secretKey  = config('services.flutterwave.secret_key', env('FLW_SECRET_KEY', ''));
-        $this->secretHash = config('services.flutterwave.secret_hash', env('FLW_SECRET_HASH', ''));
+        $this->publicKey  = (string) (config('services.flutterwave.public_key', env('FLW_PUBLIC_KEY', '')) ?? '');
+        $this->secretKey  = (string) (config('services.flutterwave.secret_key', env('FLW_SECRET_KEY', '')) ?? '');
+        $this->secretHash = (string) (config('services.flutterwave.secret_hash', env('FLW_SECRET_HASH', '')) ?? '');
         $this->baseUrl    = rtrim(config('services.flutterwave.base_url', env('FLW_BASE_URL', 'https://api.flutterwave.com/v3')), '/');
     }
 
