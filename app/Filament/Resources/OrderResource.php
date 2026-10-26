@@ -95,7 +95,7 @@ class OrderResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
                         'flutterwave' => '⚡ Flutterwave',
-                        'opay' => 'OPay (Historical)',
+                        'opay' => 'Legacy gateway',
                         'bank_transfer' => '🏦 Bank Transfer',
                         default => 'Not specified',
                     })
