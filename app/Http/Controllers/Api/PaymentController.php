@@ -365,6 +365,36 @@ class PaymentController extends Controller
                 }
             }
 
+            if ($record instanceof FoodOrder || $record instanceof Order || $record instanceof ServiceBooking) {
+                $orderType = match (true) {
+                    $record instanceof FoodOrder => 'food_order',
+                    $record instanceof Order => 'order',
+                    default => 'service_booking',
+                };
+
+                // Owner sees all verified income. Operations sees the relevant
+                // fulfillment request in its own database notification feed.
+                $recipients = \App\Models\User::whereIn('role', [
+                    \App\Models\User::ROLE_ADMIN,
+                    \App\Models\User::ROLE_IPL_ADMIN,
+                    \App\Models\User::ROLE_DELIVERY_PARTNER,
+                    \App\Models\User::ROLE_GUEST_RELATIONS,
+                ])->get();
+
+                if ($record->user) {
+                    $recipients->push($record->user);
+                }
+
+                foreach ($recipients->unique('id') as $recipient) {
+                    $recipient->notify(new \App\Notifications\VerifiedCommercePayment(
+                        $orderType,
+                        $record->id,
+                        $title,
+                        "Verified payment for {$orderType} #{$record->id}; review fulfillment."
+                    ));
+                }
+            }
+
             return ['user' => $record->user, 'title' => $title];
         }, 3);
 
