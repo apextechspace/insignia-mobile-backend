@@ -346,31 +346,42 @@ class PaymentController extends Controller
                 default => 'Concierge Booking Confirmed',
             };
 
-            return ['user' => $record->user, 'title' => $title, 'booking_id' => $record instanceof Booking ? $record->id : null];
+            if ($record instanceof Booking) {
+                $recipients = \App\Models\User::whereIn('role', [
+                    \App\Models\User::ROLE_ADMIN,
+                    \App\Models\User::ROLE_IPL_ADMIN,
+                    \App\Models\User::ROLE_DELIVERY_PARTNER,
+                    \App\Models\User::ROLE_GUEST_RELATIONS,
+                ])->get();
+                if ($record->user) {
+                    $recipients->push($record->user);
+                }
+                foreach ($recipients->unique('id') as $recipient) {
+                    $recipient->notify(new \App\Notifications\PaymentActivityNotification(
+                        'Verified suite booking',
+                        'Suite booking #' . $record->id . ' was paid and confirmed.',
+                        $record->id, 'confirmed'
+                    ));
+                }
+            }
+
+            return ['user' => $record->user, 'title' => $title];
         }, 3);
 
         if (!$notification) {
             return false;
         }
 
-        $this->sendConfirmationNotification(
-            $notification['user'],
-            $notification['title'],
-            'Your payment has been verified and confirmed.'
-        );
-        if ($notification['booking_id']) {
-            foreach (\App\Models\User::whereIn('role', [
-                \App\Models\User::ROLE_ADMIN,
-                \App\Models\User::ROLE_IPL_ADMIN,
-                \App\Models\User::ROLE_DELIVERY_PARTNER,
-                \App\Models\User::ROLE_GUEST_RELATIONS,
-            ])->get() as $staff) {
-                $staff->notify(new \App\Notifications\PaymentActivityNotification(
-                    'Verified suite booking',
-                    'Suite booking #' . $notification['booking_id'] . ' was paid and confirmed.',
-                    $notification['booking_id'], 'confirmed'
-                ));
-            }
+        // Push is best effort. A temporary Expo failure must not invalidate a
+        // committed, gateway-verified payment or lose its database notifications.
+        try {
+            $this->sendConfirmationNotification(
+                $notification['user'],
+                $notification['title'],
+                'Your payment has been verified and confirmed.'
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Payment confirmed; push delivery failed', ['message' => $e->getMessage()]);
         }
         return true;
     }
