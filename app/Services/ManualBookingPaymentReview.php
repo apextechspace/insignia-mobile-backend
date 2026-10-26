@@ -31,7 +31,7 @@ class ManualBookingPaymentReview
             if ($record->paid_at || $record->status !== 'pending' || !$record->getRawOriginal('receipt_url')) {
                 throw ValidationException::withMessages(['booking' => 'Booking is not awaiting manual receipt verification.']);
             }
-            if ($record->payment_method !== 'bank_transfer') {
+            if (!in_array($record->payment_method, [null, 'bank_transfer'], true)) {
                 throw ValidationException::withMessages(['booking' => 'Only manual bank transfers may be approved here.']);
             }
             if ((int) round((float) $amount * 100) !== (int) round((float) $record->total_price * 100)) {
