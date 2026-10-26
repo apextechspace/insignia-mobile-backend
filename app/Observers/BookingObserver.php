@@ -9,6 +9,36 @@ use Illuminate\Support\Facades\Log;
 class BookingObserver
 {
     /**
+     * Notify operations that a pending reservation entered the shared queue.
+     * Creating a booking never confirms that its payment has arrived.
+     */
+    public function created(Booking $booking): void
+    {
+        if ($booking->status !== 'pending') {
+            return;
+        }
+
+        \Illuminate\Support\Facades\DB::afterCommit(function () use ($booking): void {
+            $roomName = $booking->room?->name ?? 'Suite';
+            $recipients = \App\Models\User::whereIn('role', [
+                \App\Models\User::ROLE_ADMIN,
+                \App\Models\User::ROLE_IPL_ADMIN,
+                \App\Models\User::ROLE_DELIVERY_PARTNER,
+                \App\Models\User::ROLE_GUEST_RELATIONS,
+            ])->get();
+
+            foreach ($recipients as $recipient) {
+                $recipient->notify(new \App\Notifications\PaymentActivityNotification(
+                    'New pending room booking',
+                    "Booking #{$booking->id} for {$roomName} requires payment confirmation.",
+                    $booking->id,
+                    'pending'
+                ));
+            }
+        });
+    }
+
+    /**
      * Handle the Booking "saved" event.
      */
     public function saved(Booking $booking): void
