@@ -346,7 +346,7 @@ class PaymentController extends Controller
                 default => 'Concierge Booking Confirmed',
             };
 
-            return ['user' => $record->user, 'title' => $title];
+            return ['user' => $record->user, 'title' => $title, 'booking_id' => $record instanceof Booking ? $record->id : null];
         }, 3);
 
         if (!$notification) {
@@ -358,6 +358,20 @@ class PaymentController extends Controller
             $notification['title'],
             'Your payment has been verified and confirmed.'
         );
+        if ($notification['booking_id']) {
+            foreach (\App\Models\User::whereIn('role', [
+                \App\Models\User::ROLE_ADMIN,
+                \App\Models\User::ROLE_IPL_ADMIN,
+                \App\Models\User::ROLE_DELIVERY_PARTNER,
+                \App\Models\User::ROLE_GUEST_RELATIONS,
+            ])->get() as $staff) {
+                $staff->notify(new \App\Notifications\PaymentActivityNotification(
+                    'Verified suite booking',
+                    'Suite booking #' . $notification['booking_id'] . ' was paid and confirmed.',
+                    $notification['booking_id'], 'confirmed'
+                ));
+            }
+        }
         return true;
     }
 
