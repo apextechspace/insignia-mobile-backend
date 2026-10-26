@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Order;
 use App\Models\FoodOrder;
 use App\Models\ServiceBooking;
+use App\Models\PaymentAttempt;
 use App\Services\FlutterwaveService;
 use App\Services\OPayService;
 use App\Services\ExpoPushService;
@@ -88,9 +89,20 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'This transaction is no longer payable.'], 409);
         }
 
-        // Update record with reference and payment method
+        // Every checkout attempt is retained, even if a later attempt replaces
+        // the compatibility reference on the original payable.
+        PaymentAttempt::create([
+            'gateway' => 'flutterwave',
+            'reference' => $reference,
+            'payable_type' => get_class($record),
+            'payable_id' => $record->getKey(),
+            'amount' => $amount,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+        ]);
+
         $record->update([
-            'payment_method'        => 'flutterwave',
+            'payment_method' => 'flutterwave',
             'flutterwave_reference' => $reference,
         ]);
 
@@ -112,6 +124,7 @@ class PaymentController extends Controller
         ]);
 
         if (!$response['success']) {
+            PaymentAttempt::where('reference', $reference)->update(['status' => 'initialization_failed']);
             return response()->json([
                 'status'  => 'error',
                 'message' => $response['message'] ?? 'Unable to initialize Flutterwave checkout.',
@@ -186,7 +199,8 @@ class PaymentController extends Controller
         }
 
         // If already confirmed in database
-        if (!empty($record->paid_at) && $record->payment_method === 'flutterwave' && $record->flutterwave_reference === $reference) {
+        $attempt = PaymentAttempt::where('reference', $reference)->first();
+        if ($attempt && $attempt->status === 'confirmed' && !empty($record->paid_at)) {
             return response()->json([
                 'status'  => 'success',
                 'is_paid' => true,
@@ -407,15 +421,18 @@ class PaymentController extends Controller
             return false;
         }
 
-        $record = $this->findRecordByReference($reference);
+        $attempt = PaymentAttempt::where('reference', $reference)->where('gateway', 'flutterwave')->first();
         $data = $result['data'] ?? [];
-        if (!$record || $record->flutterwave_reference !== $reference || ($data['tx_ref'] ?? null) !== $reference || strtoupper((string) ($data['currency'] ?? '')) !== 'NGN') {
+        if (!$attempt || ($data['tx_ref'] ?? null) !== $reference
+            || strtoupper((string) ($data['currency'] ?? '')) !== $attempt->currency
+            || empty($data['id'])) {
             return false;
         }
 
-        $expected = $record instanceof FoodOrder ? $record->total_amount : $record->total_price;
-        return is_numeric($expected) && is_numeric($data['amount'] ?? null)
-            && (int) round(((float) $expected) * 100) === (int) round(((float) $data['amount']) * 100);
+        // The amount is frozen when the payment link was generated. Never
+        // compare only against a mutable shopping-cart or booking amount.
+        return is_numeric($data['amount'] ?? null)
+            && (int) round(((float) $attempt->amount) * 100) === (int) round(((float) $data['amount']) * 100);
     }
 
     /**
@@ -528,6 +545,12 @@ class PaymentController extends Controller
 
     protected function findRecordByReference(string $reference)
     {
+        $attempt = PaymentAttempt::where('gateway', 'flutterwave')
+            ->where('reference', $reference)->first();
+        if ($attempt) {
+            return $attempt->payable;
+        }
+
         return Booking::where('flutterwave_reference', $reference)
             ->orWhere('opay_reference', $reference)
             ->orWhere('payment_reference', $reference)
