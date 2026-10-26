@@ -101,6 +101,7 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
         $booking->refresh();
         $this->assertSame('confirmed', $booking->status);
         $this->assertNotNull($booking->paid_at);
+        $this->assertSame(1, $booking->user->notifications()->where('data->type', 'booking_payment')->count());
         $this->assertSame(1, AccommodationLedger::where('booking_id', $booking->id)
             ->where('type', 'revenue')->count());
         $this->assertDatabaseHas('payment_attempts', [
