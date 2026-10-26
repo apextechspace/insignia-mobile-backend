@@ -61,7 +61,7 @@ class AccommodationLedgerResource extends Resource
                             ->label('Payment Method')
                             ->options([
                                 'flutterwave'   => 'Flutterwave',
-                        'opay'          => 'OPay (Historical)',
+                        'opay'          => 'Legacy gateway',
                                 'bank_transfer' => 'Bank Transfer',
                                 'pos'           => 'POS Terminal',
                             ])
