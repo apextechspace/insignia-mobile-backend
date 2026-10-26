@@ -24,7 +24,9 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Configure isolated testing key
-        run: echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
+        run: |
+          touch .env
+          echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
 
       - name: Run payment and ledger regression tests
         env:
