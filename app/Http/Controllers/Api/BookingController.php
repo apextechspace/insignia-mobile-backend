@@ -20,46 +20,48 @@ class BookingController extends Controller
     {
         $validated = $request->validated();
 
-        $receiptUrl = null;
-        if ($request->hasFile('receipt')) {
-            $path = $request->file('receipt')->store('receipts', 'public');
-            $receiptUrl = $path;
-        }
+        // Serialize booking creation on the suite row. Confirmations and manual
+        // approvals use the same room lock, so overlapping paid stays cannot
+        // be missed between the availability check and reservation creation.
+        $booking = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
+            $room = Room::whereKey($validated['room_id'])->lockForUpdate()->firstOrFail();
 
-        // Never delete prior pending bookings: they may contain manual receipts
-        // or Flutterwave attempts which arrive after a retry.
-        // 🚨 CRITICAL: Check for overlapping confirmed stays
-        $overlap = Booking::where('room_id', $validated['room_id'])
-            ->whereIn('status', ['confirmed', 'completed'])
-            ->where('check_in', '<', $validated['check_out'])
-            ->where('check_out', '>', $validated['check_in'])
-            ->exists();
+            if (!$room->is_available || $room->status === 'maintenance') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'room_id' => 'This suite is unavailable for reservations.',
+                ]);
+            }
 
-        if ($overlap) {
-            return response()->json(['message' => 'This room is already confirmed for another guest on the selected dates.'], 422);
-        }
+            $overlap = Booking::where('room_id', $room->id)
+                ->whereIn('status', ['confirmed', 'paid', 'completed'])
+                ->where('check_in', '<', $validated['check_out'])
+                ->where('check_out', '>', $validated['check_in'])
+                ->exists();
 
-        $room = Room::findOrFail($validated['room_id']);
-        if (!$room->is_available || $room->status === 'maintenance') {
-            return response()->json(['message' => 'This suite is currently unavailable for reservations.'], 422);
-        }
-        
-        $checkIn = new \DateTime($validated['check_in']);
-        $checkOut = new \DateTime($validated['check_out']);
-        $nights = $checkIn->diff($checkOut)->days;
-        $nights = $nights > 0 ? $nights : 1;
-        
-        $totalPrice = ($nights * $room->price_per_night) + 25000; // Adding executive service fee
+            if ($overlap) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'room_id' => 'This suite is already confirmed for another guest on those dates.',
+                ]);
+            }
 
-        $booking = $request->user()->bookings()->create([
-            'room_id' => $validated['room_id'],
-            'check_in' => $validated['check_in'],
-            'check_out' => $validated['check_out'],
-            'total_price' => $totalPrice,
-            'status' => 'pending', 
-            'payment_reference' => $validated['payment_reference'] ?? null,
-            'receipt_url' => $receiptUrl,
-        ]);
+            $nights = (new \DateTimeImmutable($validated['check_in']))
+                ->diff(new \DateTimeImmutable($validated['check_out']))->days;
+            $totalPrice = $nights * $room->price_per_night + 25000;
+
+            $receiptUrl = $request->hasFile('receipt')
+                ? $request->file('receipt')->store('receipts', 'public') : null;
+
+            return $request->user()->bookings()->create([
+                'room_id' => $room->id,
+                'check_in' => $validated['check_in'],
+                'check_out' => $validated['check_out'],
+                'total_price' => $totalPrice,
+                'status' => 'pending',
+                'payment_reference' => $validated['payment_reference'] ?? null,
+                'receipt_url' => $receiptUrl,
+                'payment_method' => $receiptUrl ? 'bank_transfer' : null,
+            ]);
+        }, 3);
 
         return response()->json($booking->load('room'), 201);
     }
