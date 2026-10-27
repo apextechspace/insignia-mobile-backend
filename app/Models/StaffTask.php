@@ -23,6 +23,29 @@ class StaffTask extends Model
         'completed_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (StaffTask $task): void {
+            if ($task->task_type !== 'room_turnaround' || $task->status !== 'completed') {
+                return;
+            }
+            $items = $task->checklist_items;
+            if (!is_array($items) || count($items) === 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'checklist_items' => 'Checkout checklist is required.',
+                ]);
+            }
+            foreach ($items as $item) {
+                if (empty($item['item']) || ($item['done'] ?? false) !== true) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'checklist_items' => 'Finish every checkout checklist item.',
+                    ]);
+                }
+            }
+            $task->completed_at ??= now();
+        });
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

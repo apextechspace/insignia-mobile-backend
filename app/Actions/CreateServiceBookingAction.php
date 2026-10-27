@@ -40,6 +40,9 @@ class CreateServiceBookingAction
             'notes' => $data['notes'] ?? null,
             'total_price' => $totalPrice,
             'status' => 'pending',
+            'payment_reference' => $data['payment_reference'] ?? null,
+            'receipt_url' => $data['receipt_url'] ?? null,
+            'payment_method' => !empty($data['receipt_url']) ? 'bank_transfer' : null,
             'metadata' => $metadata,
         ]);
     }

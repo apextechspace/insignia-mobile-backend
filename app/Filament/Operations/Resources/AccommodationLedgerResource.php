@@ -60,11 +60,12 @@ class AccommodationLedgerResource extends Resource
                         Forms\Components\Select::make('payment_method')
                             ->label('Payment Method')
                             ->options([
-                                'opay'          => 'OPay (In-App)',
+                                'flutterwave'   => 'Flutterwave',
+                        'opay'          => 'Legacy gateway',
                                 'bank_transfer' => 'Bank Transfer',
                                 'pos'           => 'POS Terminal',
                             ])
-                            ->default('opay')
+                            ->default('bank_transfer')
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('channel')
@@ -174,6 +175,21 @@ class AccommodationLedgerResource extends Resource
         return $user && in_array($user->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN, User::ROLE_DELIVERY_PARTNER,
         ]);
+    }
+
+    public static function canEdit($record): bool
+    {
+        return Auth::user()?->isIplAdmin() ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function canCreate(): bool

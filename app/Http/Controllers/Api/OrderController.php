@@ -19,6 +19,10 @@ class OrderController extends Controller
     {
         $validated = $request->validated();
 
+        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
+            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        }
+
         $receiptUrl = null;
         if ($request->hasFile('receipt')) {
             $path = $request->file('receipt')->store('receipts', 'public');
@@ -45,6 +49,7 @@ class OrderController extends Controller
             'status' => 'pending',
             'payment_reference' => $validated['payment_reference'],
             'receipt_url' => $receiptUrl,
+            'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
             'delivery_location' => $validated['delivery_location'] ?? null,
         ]);
 

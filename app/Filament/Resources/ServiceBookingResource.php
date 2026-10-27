@@ -129,11 +129,14 @@ class ServiceBookingResource extends Resource
                     ->label('Payment')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'opay' => '⚡ OPay Verified',
-                        default => '🏦 Bank Transfer',
+                        'flutterwave' => '⚡ Flutterwave',
+                        'opay' => 'Legacy gateway',
+                        'bank_transfer' => '🏦 Bank Transfer',
+                        default => 'Not specified',
                     })
                     ->color(fn (?string $state): string => match ($state) {
-                        'opay' => 'success',
+                        'flutterwave' => 'success',
+                        'opay' => 'gray',
                         default => 'warning',
                     }),
                 Tables\Columns\TextColumn::make('notes')

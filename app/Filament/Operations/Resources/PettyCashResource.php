@@ -25,8 +25,16 @@ class PettyCashResource extends Resource
     public static function canViewAny(): bool
     {
         // Housekeeping / Floor staff have zero access to financial ledgers
-        return !Auth::user()->isStaff();
+        return Auth::check() && in_array(Auth::user()->role, [User::ROLE_ADMIN, User::ROLE_IPL_ADMIN, User::ROLE_DELIVERY_PARTNER], true);
     }
+
+    public static function canCreate(): bool
+    {
+        return Auth::user()?->isIplAdmin() ?? false;
+    }
+
+    public static function canEdit($record): bool { return false; }
+    public static function canDelete($record): bool { return false; }
 
     public static function form(Form $form): Form
     {

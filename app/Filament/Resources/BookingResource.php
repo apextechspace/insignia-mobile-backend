@@ -52,7 +52,7 @@ class BookingResource extends Resource
                         'completed' => 'Completed',
                     ])
                     ->required()
-                    ->default('pending'),
+                    ->default('pending')->disabled()->dehydrated(false),
                 Forms\Components\TextInput::make('payment_reference')
                     ->maxLength(255),
                 Forms\Components\FileUpload::make('receipt_url')
@@ -102,11 +102,14 @@ class BookingResource extends Resource
                     ->label('Payment')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'opay' => '⚡ OPay Verified',
-                        default => '🏦 Bank Transfer',
+                        'flutterwave' => '⚡ Flutterwave',
+                        'opay' => 'Legacy gateway',
+                        'bank_transfer' => '🏦 Bank Transfer',
+                        default => 'Not specified',
                     })
                     ->color(fn (?string $state): string => match ($state) {
-                        'opay' => 'success',
+                        'flutterwave' => 'success',
+                        'opay' => 'gray',
                         default => 'warning',
                     }),
                 Tables\Columns\ImageColumn::make('receipt_url')
@@ -149,11 +152,17 @@ class BookingResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->bulkActions([]);
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function getRelations(): array

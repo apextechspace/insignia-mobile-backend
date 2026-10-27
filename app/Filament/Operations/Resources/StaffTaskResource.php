@@ -31,10 +31,14 @@ class StaffTaskResource extends Resource
                 Forms\Components\Section::make('Task Details')
                     ->schema([
                         Forms\Components\TextInput::make('task_title')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Task Title')
                             ->required()
                             ->placeholder('e.g. Turnaround clean – Junonia'),
                         Forms\Components\Select::make('task_type')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Task Type')
                             ->options([
                                 'room_turnaround' => '🧹 Room Turnaround',
@@ -46,6 +50,8 @@ class StaffTaskResource extends Resource
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('priority')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Priority')
                             ->options([
                                 'low'    => '🟢 Low',
@@ -57,11 +63,15 @@ class StaffTaskResource extends Resource
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('room_id')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Room')
                             ->relationship('room', 'name')
                             ->searchable()
                             ->native(false),
                         Forms\Components\Select::make('user_id')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Assign To')
                             ->options(fn() => User::whereIn('role', [
                                 User::ROLE_STAFF,
@@ -71,12 +81,15 @@ class StaffTaskResource extends Resource
                             ->searchable()
                             ->native(false),
                         Forms\Components\Select::make('status')
+                            ->disabled(fn (): bool => Auth::user()?->isStaff())
+                            ->dehydrated(fn (): bool => !Auth::user()?->isStaff())
                             ->label('Status')
                             ->options([
                                 'pending'     => 'Pending',
                                 'in_progress' => 'In Progress',
                                 'completed'   => 'Completed',
-                                'verified'    => 'Verified',
+                                // Verification and room release are supervisor-only actions.
+
                             ])
                             ->default('pending')
                             ->native(false),
@@ -189,6 +202,36 @@ class StaffTaskResource extends Resource
             'create' => Pages\CreateStaffTask::route('/create'),
             'edit'   => Pages\EditStaffTask::route('/{record}/edit'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        if (Auth::user()?->isStaff()) {
+            $query->where('user_id', Auth::id());
+        }
+        return $query;
+    }
+
+    public static function canView($record): bool
+    {
+        return Auth::check() && (!Auth::user()->isStaff()
+            || (int) $record->user_id === (int) Auth::id());
+    }
+
+    public static function canCreate(): bool
+    {
+        return Auth::check() && !Auth::user()->isStaff();
+    }
+
+    public static function canEdit($record): bool
+    {
+        return Auth::check() && (!Auth::user()->isStaff() || (int) $record->user_id === (int) Auth::id());
+    }
+
+    public static function canDelete($record): bool
+    {
+        return Auth::check() && !Auth::user()->isStaff();
     }
 
     public static function canViewAny(): bool

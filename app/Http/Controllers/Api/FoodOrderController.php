@@ -32,6 +32,10 @@ class FoodOrderController extends Controller
             ], 422);
         }
 
+        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
+            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -68,6 +72,7 @@ class FoodOrderController extends Controller
                 'type' => $request->type,
                 'payment_reference' => $request->payment_reference,
                 'receipt_url' => $receiptUrl,
+            'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
                 'metadata' => $request->metadata ?? [],
             ]);
 

@@ -7,21 +7,21 @@ use App\Models\Booking;
 use App\Models\Order;
 use App\Models\FoodOrder;
 use App\Models\ServiceBooking;
+use App\Models\PaymentAttempt;
 use App\Services\FlutterwaveService;
-use App\Services\OPayService;
 use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
     protected FlutterwaveService $flutterwaveService;
-    protected OPayService $opayService;
 
-    public function __construct(FlutterwaveService $flutterwaveService, OPayService $opayService)
+    public function __construct(FlutterwaveService $flutterwaveService)
     {
         $this->flutterwaveService = $flutterwaveService;
-        $this->opayService = $opayService;
     }
 
     /**
@@ -80,11 +80,26 @@ class PaymentController extends Controller
 
         // Generate distinct reference
         $prefix = strtoupper(substr($orderType, 0, 4));
-        $reference = "INS-FLW-{$prefix}-{$record->id}-" . time();
+        $reference = "INS-FLW-{$prefix}-{$record->id}-" . Str::uuid();
 
-        // Update record with reference and payment method
+        if (!empty($record->paid_at) || in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+            return response()->json(['status' => 'error', 'message' => 'This transaction is no longer payable.'], 409);
+        }
+
+        // Every checkout attempt is retained, even if a later attempt replaces
+        // the compatibility reference on the original payable.
+        PaymentAttempt::create([
+            'gateway' => 'flutterwave',
+            'reference' => $reference,
+            'payable_type' => get_class($record),
+            'payable_id' => $record->getKey(),
+            'amount' => $amount,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+        ]);
+
         $record->update([
-            'payment_method'        => 'flutterwave',
+            'payment_method' => 'flutterwave',
             'flutterwave_reference' => $reference,
         ]);
 
@@ -106,6 +121,7 @@ class PaymentController extends Controller
         ]);
 
         if (!$response['success']) {
+            PaymentAttempt::where('reference', $reference)->update(['status' => 'initialization_failed']);
             return response()->json([
                 'status'  => 'error',
                 'message' => $response['message'] ?? 'Unable to initialize Flutterwave checkout.',
@@ -138,7 +154,7 @@ class PaymentController extends Controller
         }
 
         $payload = $request->all();
-        Log::info('Flutterwave Webhook Received:', $payload);
+        Log::info('Flutterwave webhook received', ['event' => $payload['event'] ?? null]);
 
         $event = $payload['event'] ?? '';
         $data = $payload['data'] ?? [];
@@ -151,11 +167,10 @@ class PaymentController extends Controller
             // Confirm transaction integrity with Flutterwave API
             if ($transactionId) {
                 $verification = $this->flutterwaveService->verifyTransaction($transactionId);
-                if ($verification['success'] && in_array($verification['status'], ['SUCCESSFUL', 'SUCCESS', 'COMPLETED'])) {
+                if ($this->isVerifiedPayment($verification, $txRef)
+                    && (string) ($verification['data']['id'] ?? '') === (string) $transactionId) {
                     $this->markOrderAsPaid($txRef, (string) $transactionId, 'flutterwave');
                 }
-            } else {
-                $this->markOrderAsPaid($txRef, null, 'flutterwave');
             }
         }
 
@@ -176,8 +191,13 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Transaction not found.'], 404);
         }
 
+        if ((int) $record->user_id !== (int) auth()->id()) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         // If already confirmed in database
-        if ($record->status === 'confirmed' || $record->status === 'paid' || !empty($record->paid_at)) {
+        $attempt = PaymentAttempt::where('reference', $reference)->first();
+        if ($attempt && $attempt->status === 'confirmed' && !empty($record->paid_at)) {
             return response()->json([
                 'status'  => 'success',
                 'is_paid' => true,
@@ -188,14 +208,14 @@ class PaymentController extends Controller
         // Otherwise query Flutterwave API by reference
         $flwStatus = $this->flutterwaveService->verifyByReference($reference);
 
-        if ($flwStatus['success'] && in_array($flwStatus['status'], ['SUCCESSFUL', 'SUCCESS', 'COMPLETED'])) {
+        if ($this->isVerifiedPayment($flwStatus, $reference)) {
             $transId = (string) ($flwStatus['data']['id'] ?? '');
-            $this->markOrderAsPaid($reference, $transId, 'flutterwave');
+            $confirmed = $this->markOrderAsPaid($reference, $transId, 'flutterwave');
             $record->refresh();
 
             return response()->json([
-                'status'  => 'success',
-                'is_paid' => true,
+                'status'  => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists() ? 'success' : 'pending',
+                'is_paid' => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists(),
                 'record'  => $record,
             ]);
         }
@@ -207,283 +227,228 @@ class PaymentController extends Controller
         ]);
     }
 
-    /**
-     * Legacy / OPay Cashier compatibility handlers
-     */
-    public function initialize(Request $request)
+    protected function isVerifiedPayment(array $result, string $reference): bool
     {
-        $gateway = $request->input('gateway', 'flutterwave');
-
-        if ($gateway === 'opay') {
-            return $this->initializeOPay($request);
+        if (empty($result['success']) || strtoupper((string) ($result['status'] ?? '')) !== 'SUCCESSFUL') {
+            return false;
         }
 
-        return $this->initializeFlutterwave($request);
-    }
-
-    public function verify($reference)
-    {
-        // Try Flutterwave verification first
-        $response = $this->verifyFlutterwave($reference);
-        $data = $response->getData(true);
-
-        if (!empty($data['is_paid'])) {
-            return $response;
+        $attempt = PaymentAttempt::where('reference', $reference)->where('gateway', 'flutterwave')->first();
+        $data = $result['data'] ?? [];
+        if (!$attempt || ($data['tx_ref'] ?? null) !== $reference
+            || strtoupper((string) ($data['currency'] ?? '')) !== $attempt->currency
+            || empty($data['id'])) {
+            return false;
         }
 
-        // Fallback to OPay verification if record references OPay
-        $record = $this->findRecordByReference($reference);
-        if ($record && ($record->payment_method === 'opay' || !empty($record->opay_reference))) {
-            return $this->verifyOPay($reference);
-        }
-
-        return $response;
-    }
-
-    public function initializeOPay(Request $request)
-    {
-        $validated = $request->validate([
-            'order_type' => 'required|in:booking,order,food_order,service_booking',
-            'order_id'   => 'required|integer',
-        ]);
-
-        $user = $request->user();
-        $orderType = $validated['order_type'];
-        $orderId = $validated['order_id'];
-
-        $record = null;
-        $amount = 0;
-        $productName = 'Insignia Luxury Living';
-        $productDesc = 'Insignia Courts hospitality transaction';
-
-        switch ($orderType) {
-            case 'booking':
-                $record = Booking::with('room')->where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
-                $amount = $record->total_price;
-                $suiteName = $record->room->name ?? 'Suite';
-                $productName = "Insignia Suite: {$suiteName}";
-                $productDesc = "Reservation from {$record->check_in} to {$record->check_out}";
-                break;
-
-            case 'order':
-                $record = Order::with('product')->where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
-                $amount = $record->total_price;
-                $productName = "Insignia Boutique: " . ($record->product->name ?? 'Luxury Goods');
-                $productDesc = "Delivery to {$record->delivery_location}";
-                break;
-
-            case 'food_order':
-                $record = FoodOrder::where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
-                $amount = $record->total_amount;
-                $productName = "Insignia Dining (" . ucfirst(str_replace('_', ' ', $record->type)) . ")";
-                $productDesc = "Order #{$record->id} dining service";
-                break;
-
-            case 'service_booking':
-                $record = ServiceBooking::with('service')->where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
-                $amount = $record->total_price;
-                $serviceName = $record->service->name ?? 'Concierge';
-                $productName = "Insignia Service: {$serviceName}";
-                $productDesc = "Scheduled for {$record->scheduled_at}";
-                break;
-        }
-
-        $prefix = strtoupper(substr($orderType, 0, 4));
-        $reference = "INS-OPAY-{$prefix}-{$record->id}-" . time();
-
-        $record->update([
-            'payment_method' => 'opay',
-            'opay_reference' => $reference,
-        ]);
-
-        $response = $this->opayService->createCashierPayment([
-            'reference'           => $reference,
-            'amount'              => $amount,
-            'product_name'        => $productName,
-            'product_description' => $productDesc,
-            'customer_name'       => $user->name,
-            'user_phone'          => $user->phone ?? '+2348000000000',
-            'user_email'          => $user->email,
-            'callback_url'        => url('/api/payments/opay/webhook'),
-            'return_url'          => "insignia://payment-complete?reference={$reference}&order_type={$orderType}&order_id={$orderId}",
-        ]);
-
-        if (!$response['success']) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => $response['message'] ?? 'Unable to initialize OPay checkout.',
-            ], 400);
-        }
-
-        return response()->json([
-            'status'      => 'success',
-            'cashier_url' => $response['cashierUrl'],
-            'payment_url' => $response['cashierUrl'],
-            'reference'   => $reference,
-            'order_id'    => $record->id,
-            'order_type'  => $orderType,
-            'amount'      => $amount,
-        ]);
-    }
-
-    public function webhook(Request $request)
-    {
-        $rawPayload = $request->getContent();
-        $payload = $request->all();
-
-        $signature = $request->header('sha512') 
-            ?? $request->header('Signature') 
-            ?? $request->input('sha512');
-
-        $isValid = $this->opayService->verifyWebhookSignature($rawPayload, $signature);
-        if (!$isValid && config('services.opay.env') === 'production') {
-            Log::error('OPay Webhook rejected: Invalid signature.');
-            return response()->json(['code' => '400', 'message' => 'Invalid signature'], 400);
-        }
-
-        $reference = $payload['reference'] ?? null;
-        $status = strtoupper($payload['status'] ?? '');
-        $orderNo = $payload['orderNo'] ?? null;
-
-        if (!$reference) {
-            return response()->json(['code' => '400', 'message' => 'Missing reference'], 400);
-        }
-
-        if ($status === 'SUCCESS' || $status === 'PAID') {
-            $this->markOrderAsPaid($reference, $orderNo, 'opay');
-        }
-
-        return response()->json(['code' => '00000', 'message' => 'SUCCESS']);
-    }
-
-    public function verifyOPay($reference)
-    {
-        $record = $this->findRecordByReference($reference);
-
-        if (!$record) {
-            return response()->json(['status' => 'error', 'message' => 'Transaction not found.'], 404);
-        }
-
-        if ($record->status === 'confirmed' || $record->status === 'paid' || !empty($record->paid_at)) {
-            return response()->json([
-                'status'  => 'success',
-                'is_paid' => true,
-                'record'  => $record,
-            ]);
-        }
-
-        $statusResponse = $this->opayService->queryPaymentStatus($reference, $record->opay_order_id);
-        $opayStatus = strtoupper($statusResponse['data']['status'] ?? '');
-
-        if ($opayStatus === 'SUCCESS' || $opayStatus === 'PAID') {
-            $this->markOrderAsPaid($reference, $statusResponse['data']['orderNo'] ?? null, 'opay');
-            $record->refresh();
-            return response()->json([
-                'status'  => 'success',
-                'is_paid' => true,
-                'record'  => $record,
-            ]);
-        }
-
-        return response()->json([
-            'status'  => 'pending',
-            'is_paid' => false,
-            'record'  => $record,
-        ]);
+        // The amount is frozen when the payment link was generated. Never
+        // compare only against a mutable shopping-cart or booking amount.
+        return is_numeric($data['amount'] ?? null)
+            && (int) round(((float) $attempt->amount) * 100) === (int) round(((float) $data['amount']) * 100);
     }
 
     /**
-     * Mark matched record as paid and dispatch push notification
+     * Apply provider-verified payment once, preserving all past checkout attempts.
+     * When funds arrive for a conflicting/inactive booking, record an exception
+     * for finance rather than incorrectly confirming the reservation.
      */
-    protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave')
+    protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave'): bool
     {
-        $updateData = [
-            'status'         => 'confirmed',
-            'payment_method' => $gateway,
-            'paid_at'        => now(),
-        ];
+        if ($gateway !== 'flutterwave' || !$externalId) {
+            return false;
+        }
 
-        if ($gateway === 'flutterwave') {
-            $updateData['flutterwave_reference'] = $reference;
-            if ($externalId) {
-                $updateData['flutterwave_transaction_id'] = $externalId;
+        $notification = DB::transaction(function () use ($reference, $externalId) {
+            $attempt = PaymentAttempt::where('reference', $reference)->first();
+            if (!$attempt || $attempt->gateway !== 'flutterwave') {
+                return null;
             }
-        } else {
-            $updateData['opay_reference'] = $reference;
-            if ($externalId) {
-                $updateData['opay_order_id'] = $externalId;
+
+            $model = $attempt->payable;
+            if (!$model) {
+                Log::error('Payment attempt payable missing', ['reference' => $reference]);
+                return null;
             }
+
+            // Consistent ordering: lock suite first, then booking, then attempt.
+            if ($model instanceof Booking) {
+                \App\Models\Room::whereKey($model->room_id)->lockForUpdate()->firstOrFail();
+            }
+
+            $record = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
+            $attempt = PaymentAttempt::whereKey($attempt->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($attempt->status === 'confirmed') {
+                return null; // Webhook replay, no additional notification.
+            }
+
+            if ($attempt->provider_transaction_id
+                && $attempt->provider_transaction_id !== $externalId) {
+                $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_mismatch');
+                return null;
+            }
+
+            // A provider transaction is globally unique, even across payable types.
+            if (PaymentAttempt::where('provider_transaction_id', $externalId)
+                ->whereKeyNot($attempt->getKey())->exists()) {
+                $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_reused');
+                return null;
+            }
+
+            $currentPrice = $record instanceof FoodOrder ? $record->total_amount : $record->total_price;
+            if (!is_numeric($currentPrice)
+                || (int) round(((float) $attempt->amount) * 100) !== (int) round(((float) $currentPrice) * 100)) {
+                $this->flagPaymentForReview($attempt, $externalId, 'payable_amount_changed');
+                return null;
+            }
+
+            if (!empty($record->paid_at)) {
+                $this->flagPaymentForReview($attempt, $externalId, 'already_paid_other_attempt');
+                return null;
+            }
+
+            if (in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+                $this->flagPaymentForReview($attempt, $externalId, 'payable_inactive');
+                return null;
+            }
+
+            if ($record instanceof Booking) {
+                $conflict = Booking::where('room_id', $record->room_id)
+                    ->whereKeyNot($record->getKey())
+                    ->whereIn('status', ['confirmed', 'paid', 'completed'])
+                    ->where('check_in', '<', $record->check_out)
+                    ->where('check_out', '>', $record->check_in)
+                    ->exists();
+
+                if ($conflict) {
+                    $this->flagPaymentForReview($attempt, $externalId, 'room_date_conflict');
+                    return null;
+                }
+            }
+
+            $record->status = $record instanceof FoodOrder ? 'paid' : 'confirmed';
+            $record->payment_method = 'flutterwave';
+            $record->paid_at = now();
+            $record->flutterwave_reference = $reference;
+            $record->flutterwave_transaction_id = $externalId;
+            $record->save();
+
+            $attempt->update([
+                'status' => 'confirmed',
+                'provider_transaction_id' => $externalId,
+                'confirmed_at' => now(),
+            ]);
+
+            $title = match (true) {
+                $record instanceof Booking => 'Suite Reservation Confirmed',
+                $record instanceof FoodOrder => 'Dining Order Confirmed',
+                $record instanceof Order => 'Boutique Order Confirmed',
+                default => 'Concierge Booking Confirmed',
+            };
+
+            if ($record instanceof Booking) {
+                $recipients = \App\Models\User::whereIn('role', [
+                    \App\Models\User::ROLE_ADMIN,
+                    \App\Models\User::ROLE_IPL_ADMIN,
+                    \App\Models\User::ROLE_DELIVERY_PARTNER,
+                    \App\Models\User::ROLE_GUEST_RELATIONS,
+                ])->get();
+                if ($record->user) {
+                    $recipients->push($record->user);
+                }
+                foreach ($recipients->unique('id') as $recipient) {
+                    $recipient->notify(new \App\Notifications\PaymentActivityNotification(
+                        'Verified suite booking',
+                        'Suite booking #' . $record->id . ' was paid and confirmed.',
+                        $record->id, 'confirmed'
+                    ));
+                }
+            }
+
+            if ($record instanceof FoodOrder || $record instanceof Order || $record instanceof ServiceBooking) {
+                $orderType = match (true) {
+                    $record instanceof FoodOrder => 'food_order',
+                    $record instanceof Order => 'order',
+                    default => 'service_booking',
+                };
+
+                // Owner sees all verified income. Operations sees the relevant
+                // fulfillment request in its own database notification feed.
+                $recipients = \App\Models\User::whereIn('role', [
+                    \App\Models\User::ROLE_ADMIN,
+                    \App\Models\User::ROLE_IPL_ADMIN,
+                    \App\Models\User::ROLE_DELIVERY_PARTNER,
+                    \App\Models\User::ROLE_GUEST_RELATIONS,
+                ])->get();
+
+                if ($record->user) {
+                    $recipients->push($record->user);
+                }
+
+                foreach ($recipients->unique('id') as $recipient) {
+                    $recipient->notify(new \App\Notifications\VerifiedCommercePayment(
+                        $orderType,
+                        $record->id,
+                        $title,
+                        "Verified payment for {$orderType} #{$record->id}; review fulfillment."
+                    ));
+                }
+            }
+
+            return ['user' => $record->user, 'title' => $title];
+        }, 3);
+
+        if (!$notification) {
+            return false;
         }
 
-        // 1. Try Booking
-        $booking = Booking::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($booking) {
-            $booking->update($updateData);
+        // Push is best effort. A temporary Expo failure must not invalidate a
+        // committed, gateway-verified payment or lose its database notifications.
+        try {
             $this->sendConfirmationNotification(
-                $booking->user,
-                '🏨 Suite Reservation Confirmed',
-                "Your suite reservation has been verified and confirmed via " . ucfirst($gateway) . "."
+                $notification['user'],
+                $notification['title'],
+                'Your payment has been verified and confirmed.'
             );
-            return;
+        } catch (\Throwable $e) {
+            Log::warning('Payment confirmed; push delivery failed', ['message' => $e->getMessage()]);
         }
+        return true;
+    }
 
-        // 2. Try Boutique Order
-        $order = Order::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
+    protected function flagPaymentForReview(PaymentAttempt $attempt, string $externalId, string $reason): void
+    {
+        // Keep the provider transaction evidence while withholding fulfillment.
+        $attempt->update([
+            'status' => 'needs_review',
+            'provider_transaction_id' => $externalId,
+        ]);
 
-        if ($order) {
-            $order->update($updateData);
-            $this->sendConfirmationNotification(
-                $order->user,
-                '🛍️ Order Confirmed',
-                "Your boutique purchase was paid via " . ucfirst($gateway) . " and is being prepared."
-            );
-            return;
-        }
-
-        // 3. Try Food Order
-        $foodOrder = FoodOrder::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($foodOrder) {
-            $foodUpdateData = $updateData;
-            $foodUpdateData['status'] = 'paid';
-            $foodOrder->update($foodUpdateData);
-            $this->sendConfirmationNotification(
-                $foodOrder->user,
-                '🍽️ Dining Order Confirmed',
-                'Your dining order has been received by the kitchen.'
-            );
-            return;
-        }
-
-        // 4. Try Service Booking
-        $serviceBooking = ServiceBooking::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
-
-        if ($serviceBooking) {
-            $serviceBooking->update($updateData);
-            $this->sendConfirmationNotification(
-                $serviceBooking->user,
-                '✨ Concierge Booking Confirmed',
-                "Your service appointment has been confirmed via " . ucfirst($gateway) . "."
-            );
-            return;
-        }
+        \App\Models\PaymentReconciliationCase::updateOrCreate(
+            ['payment_reference' => $attempt->reference],
+            [
+                'gateway' => 'flutterwave',
+                'provider_transaction_id' => $externalId,
+                'payable_type' => $attempt->payable_type,
+                'payable_id' => $attempt->payable_id,
+                'reason' => $reason,
+                'status' => 'needs_review',
+            ]
+        );
+        Log::warning('Verified Flutterwave payment requires reconciliation', [
+            'reference' => $attempt->reference,
+            'reason' => $reason,
+        ]);
     }
 
     protected function findRecordByReference(string $reference)
     {
+        $attempt = PaymentAttempt::where('gateway', 'flutterwave')
+            ->where('reference', $reference)->first();
+        if ($attempt) {
+            return $attempt->payable;
+        }
+
         return Booking::where('flutterwave_reference', $reference)
             ->orWhere('opay_reference', $reference)
             ->orWhere('payment_reference', $reference)
@@ -505,9 +470,8 @@ class PaymentController extends Controller
     protected function sendConfirmationNotification($user, string $title, string $message)
     {
         if ($user && !empty($user->expo_push_token)) {
-            ExpoPushService::send($user->expo_push_token, $title, $message, [
-                'type' => 'payment_confirmation',
-            ]);
+            \App\Jobs\DeliverPaymentPush::dispatch($user->getKey(), $title, $message)
+                ->afterCommit();
         }
     }
 }

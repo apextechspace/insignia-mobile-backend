@@ -54,25 +54,22 @@ class FoodOrderResource extends Resource
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('user.name')->sortable()->searchable(),
                 Tables\Columns\TextColumn::make('total_amount')->money('NGN')->sortable(),
-                Tables\Columns\SelectColumn::make('status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'paid' => 'Paid',
-                        'preparing' => 'Preparing',
-                        'delivered' => 'Delivered',
-                        'cancelled' => 'Cancelled',
-                    ])
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('type')->sortable(),
                 Tables\Columns\TextColumn::make('payment_method')
                     ->label('Payment')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'opay' => '⚡ OPay Verified',
-                        default => '🏦 Bank Transfer',
+                        'flutterwave' => '⚡ Flutterwave',
+                        'opay' => 'Legacy gateway',
+                        'bank_transfer' => '🏦 Bank Transfer',
+                        default => 'Not specified',
                     })
                     ->color(fn (?string $state): string => match ($state) {
-                        'opay' => 'success',
+                        'flutterwave' => 'success',
+                        'opay' => 'gray',
                         default => 'warning',
                     }),
                 Tables\Columns\TextColumn::make('payment_reference')

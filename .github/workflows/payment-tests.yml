@@ -1,0 +1,93 @@
+name: Laravel payment tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - fix/payment-verification-integrity-20261026
+
+jobs:
+  laravel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, bcmath, gd, pdo_sqlite, sqlite3, zip
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Configure isolated testing key
+        run: |
+          touch .env
+          echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
+
+      - name: Run payment and ledger regression tests
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          QUEUE_CONNECTION: sync
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+        run: php artisan test tests/Feature/FlutterwaveWebhookSecurityTest.php tests/Feature/FlutterwaveCheckoutRetryTest.php tests/Feature/FlutterwaveTransactionIntegrityTest.php tests/Feature/BookingLedgerIntegrityTest.php tests/Feature/PaymentReconciliationAccessTest.php tests/Feature/ManualBookingPaymentReviewTest.php tests/Feature/BookingDashboardSynchronizationTest.php tests/Feature/DiningPaymentRoutingTest.php tests/Feature/StayOperationsTest.php tests/Feature/RoomTurnoverTest.php tests/Feature/RoomReadinessInvariantTest.php tests/Feature/HousekeepingCompletionGuardTest.php tests/Feature/FinanceAccessBoundaryTest.php tests/Feature/FinanceResourceRoleTest.php tests/Feature/GuestRoomAvailabilityTest.php tests/Feature/BookingCreationLockTest.php tests/Feature/PaymentPushRetryTest.php tests/Feature/AccommodationReconciliationTest.php tests/Feature/RoomStatusRoleTest.php tests/Feature/IplMasterStatementTest.php tests/Feature/ManualBankAccountSettingsTest.php
+
+  mysql-smoke:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+          MYSQL_DATABASE: insignia_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest-root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, bcmath, gd, pdo_mysql, zip
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Migrate against real MySQL service
+        env:
+          APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: insignia_test
+          DB_USERNAME: root
+          DB_PASSWORD: test-root
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+        run: |
+          php artisan migrate --force
+          php artisan migrate:status
+
+  dashboard-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend build dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile Filament dashboard utility stylesheet
+        run: |
+          npm run build
+          test -f public/build/manifest.json
+          node -e "const m = require('./public/build/manifest.json'); if (!m['resources/css/filament-dashboard.css']) process.exit(1);"

@@ -15,14 +15,14 @@
                             ✨ Insignia Court · Abuja
                         </span>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                            ● Live Control
+                            ● Latest Snapshot
                         </span>
                     </div>
                     <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-serif">
                         Operations & Facility Command
                     </h1>
                     <p class="text-xs md:text-sm text-pink-100/80 mt-1 max-w-xl">
-                        Real-time status of all 6 luxury serviced apartments, guest turnaround workflows, and facility coordination.
+                        Current status of the managed serviced apartments, guest turnaround workflows, and facility coordination.
                     </p>
                 </div>
 
@@ -46,11 +46,26 @@
             </div>
         </div>
 
+        @unless(auth()->user()?->isStaff())
+        <nav class="flex flex-wrap items-center gap-2" aria-label="Operations shortcuts">
+            <a href="{{ \App\Filament\Operations\Resources\GuestStayResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg bg-[#4A0E2E] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#682044] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4A0E2E]">
+                Guest arrivals &amp; departures
+            </a>
+            <a href="{{ \App\Filament\Operations\Resources\RoomReadinessResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                Room readiness review
+            </a>
+            <a href="{{ \App\Filament\Operations\Resources\RoomStatusResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                Room status
+            </a>
+        </nav>
+        @endunless
+
         {{-- ============================================================ --}}
         {{-- KPI STATS CARDS: PLUM, GOLD, EMERALD & AMBER LUXURY ACCENTS --}}
         {{-- ============================================================ --}}
         @php
-            $occupancyPercentage = round(($occupiedCount / 6) * 100);
+            $totalRooms = $rooms->count();
+            $occupancyPercentage = $totalRooms > 0 ? round(($occupiedCount / $totalRooms) * 100) : 0;
         @endphp
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {{-- 1. Occupancy Card --}}
@@ -63,7 +78,7 @@
                 </div>
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-gray-900 dark:text-white">{{ $occupiedCount }}</span>
-                    <span class="text-sm font-semibold text-gray-400">/ 6 Suites</span>
+                    <span class="text-sm font-semibold text-gray-400">/ {{ $totalRooms }} Suites</span>
                 </div>
                 {{-- Progress Bar --}}
                 <div class="mt-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
@@ -83,10 +98,10 @@
                 </div>
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-emerald-700 dark:text-emerald-300">{{ $availableCount }}</span>
-                    <span class="text-sm font-semibold text-gray-400">/ 6 Ready</span>
+                    <span class="text-sm font-semibold text-gray-400">/ {{ $totalRooms }} Suites</span>
                 </div>
                 <div class="mt-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ round(($availableCount / 6) * 100) }}%"></div>
+                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ round(($totalRooms > 0 ? ($availableCount / $totalRooms) : 0) * 100) }}%"></div>
                 </div>
                 <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
                     Inspected & sanitized for arrival
@@ -136,18 +151,58 @@
             </div>
         </div>
 
+        @unless(auth()->user()?->isStaff())
+        {{-- Booking records are separate from physical occupied/cleaning status. --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+                <h2 class="font-bold text-lg text-gray-900 dark:text-white">Pending Room Bookings ({{ $pendingReservations->count() }})</h2>
+                <p class="text-xs text-gray-500 mt-1">Received bookings awaiting payment verification; not confirmed stays.</p>
+                <div class="mt-4 space-y-3">
+                    @forelse($pendingReservations as $booking)
+                        <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                            </div>
+                            <span class="text-xs text-amber-600 font-semibold whitespace-nowrap">Pending review</span>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500">No pending room bookings.</p>
+                    @endforelse
+                </div>
+            </section>
+            <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+                <h2 class="font-bold text-lg text-gray-900 dark:text-white">Upcoming Confirmed Stays ({{ $upcomingReservations->count() }})</h2>
+                <p class="text-xs text-gray-500 mt-1">Paid reservations that require upcoming front-desk preparation.</p>
+                <div class="mt-4 space-y-3">
+                    @forelse($upcomingReservations as $booking)
+                        <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                            </div>
+                            <span class="text-xs text-emerald-600 font-semibold whitespace-nowrap">Confirmed</span>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500">No upcoming confirmed stays.</p>
+                    @endforelse
+                </div>
+            </section>
+        </div>
+
+        @endunless
         {{-- ============================================================ --}}
-        {{-- 6-APARTMENT VISUAL STATUS GRID --}}
+        {{-- DYNAMIC APARTMENT STATUS GRID --}}
         {{-- ============================================================ --}}
         <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200/80 dark:border-gray-800 shadow-sm">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
                 <div>
                     <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span>🏛️ Serviced Suites Grid</span>
-                        <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(Wuse II, Abuja)</span>
+
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Interactive status tracking for all 6 apartments
+                        Room-by-room operational status from the latest dashboard request
                     </p>
                 </div>
 
@@ -220,7 +275,7 @@
                             {{-- Top Header Row: Suite Number and Status Pill --}}
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-[11px] font-mono font-bold tracking-wider uppercase text-gray-400 dark:text-gray-500">
-                                    Suite #0{{ $index + 1 }}
+                                    Suite {{ $index + 1 }}
                                 </span>
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold {{ $config['badgeBg'] }}">
                                     <span class="w-1.5 h-1.5 rounded-full {{ $config['dot'] }}"></span>
@@ -234,7 +289,7 @@
                             </h3>
 
                             {{-- Dynamic Suite Details / Guest Information --}}
-                            @if($room->status === 'occupied' && $room->activeBooking?->user)
+                            @if($room->status === 'occupied' && $room->activeBooking?->user && !auth()->user()?->isStaff())
                                 <div class="mt-3 p-3 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-red-100 dark:border-red-900/30">
                                     <div class="flex items-center gap-2">
                                         <div class="w-7 h-7 rounded-full bg-[#4A0E2E]/10 dark:bg-[#4A0E2E]/30 flex items-center justify-center text-xs font-bold text-[#4A0E2E] dark:text-pink-300">
@@ -250,13 +305,18 @@
                                         </div>
                                     </div>
                                 </div>
+                            @elseif($room->status === 'occupied')
+                                <div class="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/30">
+                                    <p class="text-xs font-semibold text-red-800 dark:text-red-300">Occupied · Active guest stay</p>
+                                    <p class="mt-1 text-[11px] text-red-700 dark:text-red-400">Front desk manages guest details and check-out.</p>
+                                </div>
                             @elseif($room->status === 'cleaning')
                                 <div class="mt-3 p-3 rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40">
                                     <p class="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                                         <span>🧹</span> Turnover in progress
                                     </p>
                                     <p class="text-[11px] text-amber-700/80 dark:text-amber-400 mt-0.5">
-                                        Linen restocked · Sanitizing surfaces
+                                        {{ $room->housekeeping_notes ?: 'Awaiting cleaning checklist completion and supervisor verification.' }}
                                     </p>
                                 </div>
                             @elseif($room->status === 'maintenance')
@@ -265,16 +325,16 @@
                                         <span>🔧</span> Scheduled repair
                                     </p>
                                     <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                        AC/Appliance maintenance underway
+                                        {{ $room->housekeeping_notes ?: 'Room blocked while maintenance is being assessed.' }}
                                     </p>
                                 </div>
                             @else
                                 <div class="mt-3 p-3 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30">
                                     <p class="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                                        <span>✨</span> Ready for VIP arrival
+                                        <span>✨</span> Available for arrivals
                                     </p>
                                     <p class="text-[11px] text-emerald-700/80 dark:text-emerald-400 mt-0.5">
-                                        ₦{{ number_format($room->price_per_night) }} / night
+                                        Room is currently marked ready for guest check-in
                                     </p>
                                 </div>
                             @endif
@@ -283,12 +343,14 @@
                         {{-- Footer Quick Actions --}}
                         <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between">
                             <span class="text-[11px] text-gray-400 dark:text-gray-500">
-                                {{ $room->housekeeping_notes ? Str::limit($room->housekeeping_notes, 20) : 'Standard Setup' }}
+                                {{ $room->housekeeping_notes ? \Illuminate\Support\Str::limit($room->housekeeping_notes, 24) : 'No room notes' }}
                             </span>
-                            <a href="{{ route('filament.operations.resources.room-statuses.edit', $room) }}"
+                            @if(\App\Filament\Operations\Resources\RoomStatusResource::canEdit($room))
+                            <a href="{{ \App\Filament\Operations\Resources\RoomStatusResource::getUrl('edit', ['record' => $room]) }}"
                                class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md {{ $config['actionBg'] }} transition-colors">
                                 Update Status →
                             </a>
+                            @endif
                         </div>
                     </div>
                 @endforeach

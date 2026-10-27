@@ -14,9 +14,9 @@ class FlutterwaveService
 
     public function __construct()
     {
-        $this->publicKey  = config('services.flutterwave.public_key', env('FLW_PUBLIC_KEY', ''));
-        $this->secretKey  = config('services.flutterwave.secret_key', env('FLW_SECRET_KEY', ''));
-        $this->secretHash = config('services.flutterwave.secret_hash', env('FLW_SECRET_HASH', 'insignia-court-secret-hash'));
+        $this->publicKey  = (string) (config('services.flutterwave.public_key', env('FLW_PUBLIC_KEY', '')) ?? '');
+        $this->secretKey  = (string) (config('services.flutterwave.secret_key', env('FLW_SECRET_KEY', '')) ?? '');
+        $this->secretHash = (string) (config('services.flutterwave.secret_hash', env('FLW_SECRET_HASH', '')) ?? '');
         $this->baseUrl    = rtrim(config('services.flutterwave.base_url', env('FLW_BASE_URL', 'https://api.flutterwave.com/v3')), '/');
     }
 
@@ -66,7 +66,7 @@ class FlutterwaveService
         ]);
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
@@ -79,7 +79,7 @@ class FlutterwaveService
 
             Log::info('Flutterwave Payment Link Response:', [
                 'status' => $response->status(),
-                'body'   => $result,
+                'gateway_status' => $result['status'] ?? null,
             ]);
 
             if ($response->successful() && isset($result['data']['link'])) {
@@ -117,7 +117,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/{$transactionId}/verify";
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
@@ -128,7 +128,7 @@ class FlutterwaveService
 
             $result = $response->json();
 
-            Log::info('Flutterwave Verify Response:', ['id' => $transactionId, 'response' => $result]);
+            Log::info('Flutterwave verification response received', ['id' => $transactionId, 'http_status' => $response->status()]);
 
             if ($response->successful() && isset($result['data'])) {
                 return [
@@ -160,7 +160,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/verify_by_reference";
 
         try {
-            $response = Http::withoutVerifying()
+            $response = Http
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
@@ -171,7 +171,7 @@ class FlutterwaveService
 
             $result = $response->json();
 
-            Log::info('Flutterwave Verify By Ref Response:', ['tx_ref' => $txRef, 'response' => $result]);
+            Log::info('Flutterwave reference verification received', ['tx_ref' => $txRef, 'http_status' => $response->status()]);
 
             if ($response->successful() && isset($result['data'])) {
                 return [
