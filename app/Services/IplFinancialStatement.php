@@ -69,9 +69,16 @@ class IplFinancialStatement
                             && (!$entry->booking || !$entry->booking->paid_at)) {
                             continue;
                         }
-                        // Do not treat a status flag as refund proof. A refund
-                        // ledger row is an explicit accounting record, reviewed
-                        // separately against provider or bank evidence.
+                        // Refund rows are included only when the refund ledger
+                        // and booking both explicitly indicate a completed refund.
+                        // The statement still requires external evidence review.
+                        if ($entry->type === 'refund' && (
+                            $entry->status !== 'refunded'
+                            || !$entry->booking
+                            || $entry->booking->status !== 'refunded'
+                        )) {
+                            continue;
+                        }
                         $append('accommodation', $entry->type, $entry->id,
                             $entry->transaction_date, $entry->gross_amount,
                             $entry->reference, $entry->payment_method ?? 'unknown',
