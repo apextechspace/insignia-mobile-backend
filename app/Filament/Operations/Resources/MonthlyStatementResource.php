@@ -192,6 +192,22 @@ class MonthlyStatementResource extends Resource
         ];
     }
 
+    public static function canCreate(): bool
+    {
+        return Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner();
+    }
+
+    public static function canEdit($record): bool
+    {
+        if (Auth::user()?->isIplAdmin()) {
+            return $record->status !== 'settled';
+        }
+        return Auth::user()?->isDeliveryPartner()
+            && in_array($record->status, ['draft', 'queried'], true);
+    }
+
+    public static function canDelete($record): bool { return false; }
+
     public static function canViewAny(): bool
     {
         $user = Auth::user();
