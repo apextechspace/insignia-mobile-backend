@@ -10,7 +10,7 @@ class RoomController extends Controller
 {
     public function index()
     {
-        return response()->json(Room::where('is_available', true)->get());
+        return response()->json(Room::where('is_available', true)->where('status', '!=', 'maintenance')->get());
     }
 
     public function show(Room $room)
