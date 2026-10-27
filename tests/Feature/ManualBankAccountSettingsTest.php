@@ -79,6 +79,60 @@ class ManualBankAccountSettingsTest extends TestCase
         $this->assertDatabaseCount('bookings', 0);
     }
 
+    public function test_ipl_can_activate_replace_and_disable_account_without_exposing_previous_details(): void
+    {
+        $owner = User::factory()->create(['role' => User::ROLE_IPL_ADMIN]);
+        $this->actingAs($owner);
+
+        \Livewire\Livewire::test(ManualBankSettings::class)
+            ->set('bankName', 'Example One Bank')
+            ->set('accountName', 'Test Beneficiary Ltd')
+            ->set('accountNumber', '0123456789')
+            ->set('active', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->getJson('/api/payment-methods/manual-bank')
+            ->assertOk()->assertJsonPath('is_configured', true)
+            ->assertJsonPath('account_number', '0123456789');
+
+        \Livewire\Livewire::test(ManualBankSettings::class)
+            ->set('bankName', 'Example Two Bank')
+            ->set('accountName', 'Different Test Beneficiary')
+            ->set('accountNumber', '9876543210')
+            ->set('active', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame(1, ManualBankAccount::where('is_active', true)->count());
+        $this->assertSame(2, ManualBankAccount::count());
+        $this->getJson('/api/payment-methods/manual-bank')
+            ->assertOk()->assertJsonPath('account_number', '9876543210')
+            ->assertJsonPath('bank_name', 'Example Two Bank');
+
+        \Livewire\Livewire::test(ManualBankSettings::class)
+            ->set('active', false)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->getJson('/api/payment-methods/manual-bank')
+            ->assertOk()->assertJsonPath('is_configured', false)
+            ->assertJsonPath('account_number', null);
+    }
+
+    public function test_ipl_cannot_activate_malformed_account_number(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_IPL_ADMIN]));
+        \Livewire\Livewire::test(ManualBankSettings::class)
+            ->set('bankName', 'Example Bank')
+            ->set('accountName', 'Test Business')
+            ->set('accountNumber', '12345')
+            ->set('active', true)
+            ->call('save')
+            ->assertHasErrors(['accountNumber']);
+        $this->assertDatabaseCount('manual_bank_accounts', 0);
+    }
+
     public function test_guest_bank_details_endpoint_requires_authentication(): void
     {
         $this->getJson('/api/payment-methods/manual-bank')->assertUnauthorized();
