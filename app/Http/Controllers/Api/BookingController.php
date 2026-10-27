@@ -20,6 +20,10 @@ class BookingController extends Controller
     {
         $validated = $request->validated();
 
+        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
+            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        }
+
         // Serialize booking creation on the suite row. Confirmations and manual
         // approvals use the same room lock, so overlapping paid stays cannot
         // be missed between the availability check and reservation creation.
