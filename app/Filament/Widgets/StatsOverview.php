@@ -32,19 +32,29 @@ class StatsOverview extends BaseWidget
         // MCL Operations Statements awaiting IPL Review
         $pendingStatements = \App\Models\MonthlyStatement::where('status', 'submitted_to_ipl')->count();
 
-        $totalRooms = \App\Models\Room::count() ?: 6;
+        $totalRooms = \App\Models\Room::count();
         $occupiedRooms = \App\Models\Room::where('status', 'occupied')->count();
-        $occupancyPct = round(($occupiedRooms / $totalRooms) * 100);
+        $occupancyPct = $totalRooms > 0 ? round(($occupiedRooms / $totalRooms) * 100) : 0;
+
+        $receiptsWaitingForReview = Booking::where('status', 'pending')
+            ->whereNull('paid_at')
+            ->where('payment_method', 'bank_transfer')
+            ->whereNotNull('receipt_url')
+            ->count();
 
         return [
             Stat::make('Suite Occupancy', "{$occupiedRooms}/{$totalRooms} ({$occupancyPct}%)")
-                ->description($occupiedRooms > 0 ? 'Live occupied suites at Wuse II' : 'All suites vacant / ready')
+                ->description($occupiedRooms > 0 ? 'Suites currently occupied' : 'All suites vacant / ready')
                 ->descriptionIcon('heroicon-m-home-modern', IconPosition::Before)
                 ->color($occupiedRooms >= 3 ? 'success' : 'info'),
             Stat::make('Total Revenue (30d)', '₦' . number_format($totalRevenue))
                 ->description('Room: ₦' . number_format($bookingRevenue) . ' · Ancillary: ₦' . number_format($serviceRevenue + $shopRevenue + $diningRevenue))
                 ->descriptionIcon('heroicon-m-banknotes', IconPosition::Before)
                 ->color('success'),
+            Stat::make('Bank Receipts to Verify', $receiptsWaitingForReview)
+                ->description($receiptsWaitingForReview ? 'Check actual bank credit before approval' : 'No pending transfer receipts')
+                ->descriptionIcon('heroicon-m-shield-check', IconPosition::Before)
+                ->color($receiptsWaitingForReview ? 'warning' : 'success'),
             Stat::make('MCL Statements', $pendingStatements)
                 ->description($pendingStatements > 0 ? 'Monthly billing awaiting IPL approval' : 'All statements reviewed')
                 ->descriptionIcon('heroicon-m-document-check', IconPosition::Before)
