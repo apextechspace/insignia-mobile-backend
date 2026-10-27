@@ -59,7 +59,7 @@ class BookingController extends Controller
                 'status' => 'pending',
                 'payment_reference' => $validated['payment_reference'] ?? null,
                 'receipt_url' => $receiptUrl,
-                'payment_method' => $receiptUrl ? 'bank_transfer' : null,
+                'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
             ]);
         }, 3);
 
