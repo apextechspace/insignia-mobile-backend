@@ -49,6 +49,7 @@ class OrderController extends Controller
             'status' => 'pending',
             'payment_reference' => $validated['payment_reference'],
             'receipt_url' => $receiptUrl,
+            'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
             'delivery_location' => $validated['delivery_location'] ?? null,
         ]);
 
