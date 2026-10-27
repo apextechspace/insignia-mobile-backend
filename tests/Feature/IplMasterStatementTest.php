@@ -80,6 +80,34 @@ class IplMasterStatementTest extends TestCase
         $this->assertSame(-300000, $this->report('expense')['net_cents']);
     }
 
+    public function test_refund_is_included_only_when_refund_and_booking_states_match(): void
+    {
+        $room = Room::create(['name' => 'Refund Suite', 'type' => 'Suite', 'price_per_night' => 50000, 'status' => 'available']);
+        $booking = Booking::create([
+            'user_id' => User::factory()->create()->id, 'room_id' => $room->id,
+            'check_in' => today()->addDays(3)->toDateString(),
+            'check_out' => today()->addDays(5)->toDateString(),
+            'total_price' => 10000, 'status' => 'pending',
+        ]);
+        $booking->update(['paid_at' => now(), 'status' => 'confirmed', 'payment_method' => 'flutterwave']);
+
+        AccommodationLedger::create([
+            'booking_id' => $booking->id, 'room_id' => $room->id,
+            'reference' => 'REF-TEST-1', 'type' => 'refund',
+            'gross_amount' => 2000, 'net_amount' => 2000,
+            'payment_method' => 'flutterwave', 'channel' => 'app',
+            'status' => 'confirmed', 'transaction_date' => now(),
+        ]);
+        $this->assertSame(0, $this->report()['outflow_cents']);
+
+        $booking->update(['status' => 'refunded']);
+        $this->assertSame(0, $this->report()['outflow_cents']);
+
+        AccommodationLedger::where('reference', 'REF-TEST-1')->update(['status' => 'refunded']);
+        $this->assertSame(200000, $this->report()['outflow_cents']);
+        $this->assertSame(800000, $this->report()['net_cents']);
+    }
+
     public function test_invalid_dates_and_unknown_source_are_rejected(): void
     {
         $this->expectException(ValidationException::class);
