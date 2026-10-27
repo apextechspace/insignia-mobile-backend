@@ -40,6 +40,9 @@ class BookingController extends Controller
         }
 
         $room = Room::findOrFail($validated['room_id']);
+        if (!$room->is_available || $room->status === 'maintenance') {
+            return response()->json(['message' => 'This suite is currently unavailable for reservations.'], 422);
+        }
         
         $checkIn = new \DateTime($validated['check_in']);
         $checkOut = new \DateTime($validated['check_out']);
