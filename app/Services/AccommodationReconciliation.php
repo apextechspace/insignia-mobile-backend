@@ -21,6 +21,12 @@ class AccommodationReconciliation
                 foreach ($bookings as $booking) {
                     $revenues = AccommodationLedger::where('booking_id', $booking->id)
                         ->where('type', 'revenue')->get();
+                    if ($booking->status === 'refunded'
+                        && !AccommodationLedger::where('booking_id', $booking->id)
+                            ->where('type', 'refund')->exists()) {
+                        $exceptions->push($this->row($booking, 'refund_status_without_evidence',
+                            'Booking says refunded but no reviewed refund ledger entry exists. Confirm bank/provider payout evidence.'));
+                    }
                     if ($revenues->count() === 0) {
                         $exceptions->push($this->row($booking, 'paid_booking_missing_revenue',
                             'Paid booking has no accommodation revenue entry.'));
