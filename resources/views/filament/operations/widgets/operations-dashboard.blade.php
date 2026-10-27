@@ -15,14 +15,14 @@
                             ✨ Insignia Court · Abuja
                         </span>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                            ● Live Control
+                            ● Latest Snapshot
                         </span>
                     </div>
                     <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-serif">
                         Operations & Facility Command
                     </h1>
                     <p class="text-xs md:text-sm text-pink-100/80 mt-1 max-w-xl">
-                        Real-time status of all 6 luxury serviced apartments, guest turnaround workflows, and facility coordination.
+                        Current status of the managed serviced apartments, guest turnaround workflows, and facility coordination.
                     </p>
                 </div>
 
@@ -50,7 +50,8 @@
         {{-- KPI STATS CARDS: PLUM, GOLD, EMERALD & AMBER LUXURY ACCENTS --}}
         {{-- ============================================================ --}}
         @php
-            $occupancyPercentage = round(($occupiedCount / 6) * 100);
+            $totalRooms = $rooms->count();
+            $occupancyPercentage = $totalRooms > 0 ? round(($occupiedCount / $totalRooms) * 100) : 0;
         @endphp
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {{-- 1. Occupancy Card --}}
@@ -63,7 +64,7 @@
                 </div>
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-gray-900 dark:text-white">{{ $occupiedCount }}</span>
-                    <span class="text-sm font-semibold text-gray-400">/ 6 Suites</span>
+                    <span class="text-sm font-semibold text-gray-400">/ {{ $totalRooms }} Suites</span>
                 </div>
                 {{-- Progress Bar --}}
                 <div class="mt-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
@@ -83,10 +84,10 @@
                 </div>
                 <div class="mt-2 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-emerald-700 dark:text-emerald-300">{{ $availableCount }}</span>
-                    <span class="text-sm font-semibold text-gray-400">/ 6 Ready</span>
+                    <span class="text-sm font-semibold text-gray-400">/ {{ $totalRooms }} Suites</span>
                 </div>
                 <div class="mt-3 w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ round(($availableCount / 6) * 100) }}%"></div>
+                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ round(($totalRooms > 0 ? ($availableCount / $totalRooms) : 0) * 100) }}%"></div>
                 </div>
                 <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
                     Inspected & sanitized for arrival
@@ -175,17 +176,17 @@
         </div>
 
         {{-- ============================================================ --}}
-        {{-- 6-APARTMENT VISUAL STATUS GRID --}}
+        {{-- DYNAMIC APARTMENT STATUS GRID --}}
         {{-- ============================================================ --}}
         <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200/80 dark:border-gray-800 shadow-sm">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
                 <div>
                     <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span>🏛️ Serviced Suites Grid</span>
-                        <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(Wuse II, Abuja)</span>
+
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Interactive status tracking for all 6 apartments
+                        Room-by-room operational status from the latest dashboard request
                     </p>
                 </div>
 
