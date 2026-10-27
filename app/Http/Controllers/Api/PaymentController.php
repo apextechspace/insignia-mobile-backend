@@ -470,9 +470,8 @@ class PaymentController extends Controller
     protected function sendConfirmationNotification($user, string $title, string $message)
     {
         if ($user && !empty($user->expo_push_token)) {
-            ExpoPushService::send($user->expo_push_token, $title, $message, [
-                'type' => 'payment_confirmation',
-            ]);
+            \App\Jobs\DeliverPaymentPush::dispatch($user->getKey(), $title, $message)
+                ->afterCommit();
         }
     }
 }
