@@ -1,0 +1,11 @@
+/*
+ * Filament v3 supplies the panel's base CSS.  This standalone Tailwind v4
+ * bundle adds ONLY utilities used by custom Insignia Blade dashboards.
+ * Deliberately omit tailwindcss/preflight.css so Filament's base, forms
+ * and table styling is not reset or overridden by a second CSS reset.
+ */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@source "../../views/filament/**/*.blade.php";
+@source "../../../app/Filament/**/*.php";
