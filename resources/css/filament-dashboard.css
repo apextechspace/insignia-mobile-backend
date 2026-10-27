@@ -5,10 +5,10 @@
  * and table styling is not reset or overridden by a second CSS reset.
  */
 @import "tailwindcss/theme.css";
-@import "tailwindcss/utilities.css";
+/* Only generate utilities for our own Blade widgets, not Filament internals. */
+@import "tailwindcss/utilities.css" source(none);
 
 @source "../views/filament/**/*.blade.php";
-@source "../../../app/Filament/**/*.php";
 
 /*
  * Insignia room editor visual tokens.
