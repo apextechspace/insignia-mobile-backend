@@ -137,6 +137,7 @@
             </div>
         </div>
 
+        @unless(auth()->user()?->isStaff())
         {{-- Booking records are separate from physical occupied/cleaning status. --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
@@ -175,6 +176,7 @@
             </section>
         </div>
 
+        @endunless
         {{-- ============================================================ --}}
         {{-- DYNAMIC APARTMENT STATUS GRID --}}
         {{-- ============================================================ --}}
@@ -259,7 +261,7 @@
                             {{-- Top Header Row: Suite Number and Status Pill --}}
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-[11px] font-mono font-bold tracking-wider uppercase text-gray-400 dark:text-gray-500">
-                                    Suite #0{{ $index + 1 }}
+                                    Suite {{ $index + 1 }}
                                 </span>
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold {{ $config['badgeBg'] }}">
                                     <span class="w-1.5 h-1.5 rounded-full {{ $config['dot'] }}"></span>
