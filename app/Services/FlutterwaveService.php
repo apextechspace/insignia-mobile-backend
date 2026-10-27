@@ -66,8 +66,7 @@ class FlutterwaveService
         ]);
 
         try {
-            $response = Http
-                ->withHeaders([
+            $response = Http::withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
                     'Accept'        => 'application/json',
@@ -117,8 +116,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/{$transactionId}/verify";
 
         try {
-            $response = Http
-                ->withHeaders([
+            $response = Http::withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
                     'Accept'        => 'application/json',
@@ -160,8 +158,7 @@ class FlutterwaveService
         $endpoint = "{$this->baseUrl}/transactions/verify_by_reference";
 
         try {
-            $response = Http
-                ->withHeaders([
+            $response = Http::withHeaders([
                     'Authorization' => "Bearer {$this->secretKey}",
                     'Content-Type'  => 'application/json',
                     'Accept'        => 'application/json',
