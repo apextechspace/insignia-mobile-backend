@@ -57,6 +57,22 @@ class BookingLedgerIntegrityTest extends TestCase
             ->where('type', 'revenue')->count());
     }
 
+    public function test_refunded_status_alone_does_not_create_unverified_refund_ledger(): void
+    {
+        $booking = $this->booking();
+        $booking->update([
+            'status' => 'confirmed',
+            'payment_method' => 'flutterwave',
+            'paid_at' => now(),
+        ]);
+
+        $booking->update(['status' => 'refunded']);
+        $this->assertSame(1, AccommodationLedger::where('booking_id', $booking->id)
+            ->where('type', 'revenue')->count());
+        $this->assertSame(0, AccommodationLedger::where('booking_id', $booking->id)
+            ->where('type', 'refund')->count());
+    }
+
     public function test_cancelling_paid_booking_does_not_falsely_record_refund(): void
     {
         $booking = $this->booking();
