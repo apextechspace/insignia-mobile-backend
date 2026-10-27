@@ -26,6 +26,8 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/user/profile', [ProfileController::class, 'updateProfile']);
     Route::post('/user/push-token', [ProfileController::class, 'updatePushToken']);
 
+    Route::get('/payment-methods/manual-bank', [App\Http\Controllers\Api\ManualBankAccountController::class, 'show']);
+
     Route::get('/rooms', [RoomController::class, 'index']);
     Route::get('/rooms/{room}', [RoomController::class, 'show']);
 
