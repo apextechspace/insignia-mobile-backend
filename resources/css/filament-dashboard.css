@@ -9,3 +9,105 @@
 
 @source "../views/filament/**/*.blade.php";
 @source "../../../app/Filament/**/*.php";
+
+/*
+ * Insignia room editor visual tokens.
+ * These hooks are only attached to the room editor Sections via
+ * RoomResource::form(); other Filament screens remain unchanged.
+ * Keep outside @layer: Filament's component utilities are layered and
+ * the unlayered scoped declarations win without a second CSS reset.
+ */
+:root {
+    --insignia-room-surface: #ffffff;
+    --insignia-room-foreground: #172033;
+    --insignia-room-muted: #596579;
+    --insignia-room-border: #dce2eb;
+    --insignia-room-input-bg: #ffffff;
+    --insignia-room-input-text: #172033;
+    --insignia-room-input-border: #bfc9d8;
+}
+html.dark {
+    --insignia-room-surface: #151f30;
+    --insignia-room-foreground: #f3f6fc;
+    --insignia-room-muted: #aab7c9;
+    --insignia-room-border: #344258;
+    --insignia-room-input-bg: #202c40;
+    --insignia-room-input-text: #f3f6fc;
+    --insignia-room-input-border: #50617a;
+}
+
+/* Room editor cards should always follow the selected panel theme. */
+.fi-section.insignia-room-section {
+    background: var(--insignia-room-surface);
+    color: var(--insignia-room-foreground);
+    border: 1px solid var(--insignia-room-border);
+    border-radius: 0.875rem;
+    box-shadow: 0 2px 10px rgb(15 23 42 / 5%);
+}
+.fi-section.insignia-room-section .fi-section-header,
+.fi-section.insignia-room-section .fi-section-content {
+    background: transparent;
+}
+.fi-section.insignia-room-section .fi-section-header-heading,
+.fi-section.insignia-room-section .fi-fo-field-wrp-label,
+.fi-section.insignia-room-section .fi-fo-field-wrp-label span {
+    color: var(--insignia-room-foreground);
+}
+.fi-section.insignia-room-section .fi-section-header-description,
+.fi-section.insignia-room-section .fi-fo-field-wrp-hint,
+.fi-section.insignia-room-section .fi-fo-field-wrp-helper-text {
+    color: var(--insignia-room-muted);
+}
+.fi-section.insignia-room-section .fi-input-wrp {
+    background: var(--insignia-room-input-bg);
+    border: 1px solid var(--insignia-room-input-border);
+    border-radius: 0.625rem;
+    color: var(--insignia-room-input-text);
+}
+.fi-section.insignia-room-section .fi-input,
+.fi-section.insignia-room-section input:not([type="checkbox"]):not([type="radio"]),
+.fi-section.insignia-room-section textarea,
+.fi-section.insignia-room-section select,
+.fi-section.insignia-room-section .fi-select-input {
+    color: var(--insignia-room-input-text);
+    background-color: var(--insignia-room-input-bg);
+    caret-color: var(--insignia-room-input-text);
+}
+.fi-section.insignia-room-section input::placeholder,
+.fi-section.insignia-room-section textarea::placeholder {
+    color: var(--insignia-room-muted);
+    opacity: 0.8;
+}
+.fi-section.insignia-room-section .fi-input-wrp:focus-within {
+    border-color: #b64f88;
+    outline: 2px solid rgb(182 79 136 / 23%);
+    outline-offset: 1px;
+}
+.fi-section.insignia-room-section .fi-checkbox-input {
+    accent-color: #a84781;
+}
+
+/* Restore page title and header action contrast within the room editor. */
+.fi-main:has(.insignia-room-section) .fi-header-heading {
+    color: #172033;
+}
+.fi-main:has(.insignia-room-section) .fi-header-subheading {
+    color: #596579;
+}
+html.dark .fi-main:has(.insignia-room-section) .fi-header-heading {
+    color: #f3f6fc;
+}
+html.dark .fi-main:has(.insignia-room-section) .fi-header-subheading {
+    color: #aab7c9;
+}
+
+/* Prevent wide form sections from forcing overflow with either sidebar state. */
+.fi-main:has(.insignia-room-section) .fi-fo-component-ctn,
+.fi-main:has(.insignia-room-section) .fi-section {
+    min-width: 0;
+}
+@media (max-width: 1023px) {
+    .fi-section.insignia-room-section {
+        border-radius: 0.75rem;
+    }
+}
