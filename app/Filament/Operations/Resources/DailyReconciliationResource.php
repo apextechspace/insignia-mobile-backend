@@ -198,6 +198,14 @@ class DailyReconciliationResource extends Resource
         ];
     }
 
+    public static function canEdit($record): bool
+    {
+        return Auth::check() && $record->status === 'submitted'
+            && (int) $record->submitted_by === (int) Auth::id();
+    }
+
+    public static function canDelete($record): bool { return false; }
+
     public static function canViewAny(): bool
     {
         $user = Auth::user();
