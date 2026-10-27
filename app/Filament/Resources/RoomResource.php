@@ -42,6 +42,7 @@ class RoomResource extends Resource
                 Forms\Components\Group::make([
                     // Section A: Suite Identity & Description
                     Forms\Components\Section::make('Suite Identity & Story')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('Core branding, naming, categorization, and guest reservation write-up.')
                         ->icon('heroicon-m-building-office-2')
                         ->schema([
@@ -87,6 +88,7 @@ class RoomResource extends Resource
 
                     // Section C: Amenities & Premium Inclusions
                     Forms\Components\Section::make('Amenities & Premium Inclusions')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('Select all features, services, and conveniences included in this suite rate.')
                         ->icon('heroicon-m-sparkles')
                         ->collapsible()
@@ -113,6 +115,7 @@ class RoomResource extends Resource
 
                     // Section D: Photography Gallery
                     Forms\Components\Section::make('Photography Gallery')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('High-resolution imagery for guest catalogues. The first photo serves as the primary cover image.')
                         ->icon('heroicon-m-photo')
                         ->collapsible()
@@ -138,6 +141,7 @@ class RoomResource extends Resource
 
                     // Section E: Video Walkthrough
                     Forms\Components\Section::make('Cinematic Video Walkthrough')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('Provide an optional high-definition video walkthrough of the suite.')
                         ->icon('heroicon-m-film')
                         ->collapsible()
@@ -163,6 +167,7 @@ class RoomResource extends Resource
                 Forms\Components\Group::make([
                     // Section B1: Pricing & Commercial Terms
                     Forms\Components\Section::make('Pricing & Commercial Terms')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('Nightly guest rates and booking visibility.')
                         ->icon('heroicon-m-banknotes')
                         ->schema([
@@ -186,6 +191,7 @@ class RoomResource extends Resource
 
                     // Section B2: Operations & Housekeeping
                     Forms\Components\Section::make('Operations & Housekeeping')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->description('Real-time operational readiness and shift handover notes.')
                         ->icon('heroicon-m-clipboard-document-check')
                         ->schema([
@@ -211,6 +217,7 @@ class RoomResource extends Resource
 
                     // Section B3: Suite Quick Snapshot (on Edit)
                     Forms\Components\Section::make('Suite Snapshot')
+                        ->extraAttributes(['class' => 'insignia-room-section'])
                         ->icon('heroicon-m-information-circle')
                         ->schema([
                             Forms\Components\Placeholder::make('created_at')
@@ -356,13 +363,13 @@ class RoomResource extends Resource
                     ->label('Photo')
                     ->disk('public')
                     ->circular(false)
-                    ->width(88)
-                    ->height(62)
+                    ->width(120)
+                    ->height(90)
                     ->extraImgAttributes([
                         'class' => 'rounded-xl object-cover ring-1 ring-slate-200 dark:ring-white/10 shadow-sm transition hover:scale-105',
                         'loading' => 'lazy',
                     ])
-                    ->defaultImageUrl('https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=300&q=80')
+                    ->defaultImageUrl(asset('images/insignia-court-logo.svg'))
                     ->stacked()
                     ->limit(1),
 
