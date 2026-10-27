@@ -143,6 +143,11 @@ class RoomStatusResource extends Resource
     /**
      * All roles in the operations panel can see rooms.
      */
+    public static function canEdit($record): bool
+    {
+        return Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner();
+    }
+
     public static function canViewAny(): bool
     {
         return Auth::check();
