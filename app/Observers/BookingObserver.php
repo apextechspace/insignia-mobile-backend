@@ -71,34 +71,9 @@ class BookingObserver
             }
         }
 
-        $isCancelledOrRefunded = in_array(strtolower((string) $booking->status), ['refunded']);
+        // A booking being marked refunded is not provider/bank evidence that
+        // funds were returned. A separate verified refund settlement workflow
+        // must record the actual refund ledger transaction.
 
-        if ($isCancelledOrRefunded) {
-            $hasRevenueEntry = AccommodationLedger::where('booking_id', $booking->id)
-                ->where('type', 'revenue')
-                ->exists();
-
-            $existingRefund = AccommodationLedger::where('booking_id', $booking->id)
-                ->where('type', 'refund')
-                ->exists();
-
-            if ($hasRevenueEntry && !$existingRefund) {
-                AccommodationLedger::create([
-                        'booking_id' => $booking->id,
-                        'room_id' => $booking->room_id,
-                        'reference' => 'REF-' . ($booking->payment_reference ?: 'BK' . $booking->id . '-' . time()),
-                        'type' => 'refund',
-                        'gross_amount' => $booking->total_price,
-                        'net_amount' => $booking->total_price,
-                        'payment_method' => $booking->payment_method ?: 'flutterwave',
-                        'channel' => 'app',
-                        'status' => 'refunded',
-                        'collected_by' => 'ipl',
-                        'transaction_date' => now(),
-                        'notes' => 'Automated reversal/refund entry for cancelled/refunded Booking #' . $booking->id,
-                        'created_by' => $booking->user_id,
-                    ]);
-            }
-        }
     }
 }
