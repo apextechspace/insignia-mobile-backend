@@ -46,6 +46,20 @@
             </div>
         </div>
 
+        @unless(auth()->user()?->isStaff())
+        <nav class="flex flex-wrap items-center gap-2" aria-label="Operations shortcuts">
+            <a href="{{ \App\Filament\Operations\Resources\GuestStayResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg bg-[#4A0E2E] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#682044] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4A0E2E]">
+                Guest arrivals &amp; departures
+            </a>
+            <a href="{{ \App\Filament\Operations\Resources\RoomReadinessResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                Room readiness review
+            </a>
+            <a href="{{ \App\Filament\Operations\Resources\RoomStatusResource::getUrl('index') }}" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                Room status
+            </a>
+        </nav>
+        @endunless
+
         {{-- ============================================================ --}}
         {{-- KPI STATS CARDS: PLUM, GOLD, EMERALD & AMBER LUXURY ACCENTS --}}
         {{-- ============================================================ --}}
