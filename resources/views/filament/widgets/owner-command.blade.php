@@ -17,6 +17,16 @@
             </div>
         </section>
 
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ \App\Filament\Pages\IplMasterStatement::getUrl(panel: 'admin') }}"
+               class="inline-flex items-center rounded-lg bg-[#4A0E2E] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#722D52]">
+                Open master financial statement →
+            </a>
+            <a href="{{ \App\Filament\Pages\AccommodationReconciliationReport::getUrl(panel: 'admin') }}"
+               class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                Review accommodation discrepancies
+            </a>
+        </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <a href="{{ \App\Filament\Resources\ManualTransferReviewResource::getUrl('index') }}" class="group rounded-xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-400 hover:shadow-sm dark:border-amber-900 dark:bg-amber-950/30">
                 <p class="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Bank receipts</p>
