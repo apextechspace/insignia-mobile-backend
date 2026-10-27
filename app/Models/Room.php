@@ -63,35 +63,98 @@ class Room extends Model
         $images = !is_null($value) && !is_array($value) ? json_decode($value, true) : $value;
         $images = $images ?: [];
 
-        // If inside Filament admin/operations panel request, keep relative paths for FileUpload component
-        if (request() && (request()->is('admin*') || request()->is('operations*') || request()->is('livewire*'))) {
-            return array_map(function ($image) {
-                if (is_string($image) && str_contains($image, '/storage/')) {
+        $cleanRelative = function ($image) {
+            if (is_string($image)) {
+                if (str_contains($image, '/storage/')) {
                     return explode('/storage/', $image)[1];
                 }
-                return $image;
-            }, $images);
+                if (str_starts_with($image, 'storage/')) {
+                    return substr($image, 8);
+                }
+            }
+            return $image;
+        };
+
+        // If inside Filament admin/operations panel, Livewire, or console (tinker/commands/seeders), keep relative paths
+        if (
+            (app()->runningInConsole() && !app()->runningUnitTests()) ||
+            (function_exists('filament') && filament()->isServing()) ||
+            (request() && request()->is('admin*', 'operations*', 'livewire*'))
+        ) {
+            return array_values(array_filter(array_map($cleanRelative, $images)));
         }
 
-        return array_map(function ($image) {
-            if (is_string($image) && strpos($image, 'http') === 0) return $image;
+        return array_values(array_filter(array_map(function ($image) use ($cleanRelative) {
+            $image = $cleanRelative($image);
+            if (is_string($image) && str_starts_with($image, 'http')) return $image;
             return asset('storage/' . $image);
-        }, $images);
+        }, $images)));
+    }
+
+    public function setImagesAttribute($value): void
+    {
+        $images = !is_null($value) && !is_array($value) ? json_decode($value, true) : $value;
+        $images = $images ?: [];
+
+        $cleaned = array_values(array_filter(array_map(function ($image) {
+            if (!is_string($image)) return $image;
+            if (str_contains($image, '/storage/')) {
+                return explode('/storage/', $image)[1];
+            }
+            if (str_starts_with($image, 'storage/')) {
+                return substr($image, 8);
+            }
+            return $image;
+        }, $images)));
+
+        $this->attributes['images'] = json_encode($cleaned);
     }
 
     public function getVideoUrlAttribute($value)
     {
         if (!$value) return null;
 
-        if (request() && (request()->is('admin*') || request()->is('operations*') || request()->is('livewire*'))) {
-            if (str_contains($value, '/storage/')) {
-                return explode('/storage/', $value)[1];
+        $cleanRelative = function ($video) {
+            if (is_string($video)) {
+                if (str_contains($video, '/storage/')) {
+                    return explode('/storage/', $video)[1];
+                }
+                if (str_starts_with($video, 'storage/')) {
+                    return substr($video, 8);
+                }
             }
-            return $value;
+            return $video;
+        };
+
+        if (
+            (app()->runningInConsole() && !app()->runningUnitTests()) ||
+            (function_exists('filament') && filament()->isServing()) ||
+            (request() && request()->is('admin*', 'operations*', 'livewire*'))
+        ) {
+            return $cleanRelative($value);
         }
 
-        if (strpos($value, 'http') === 0) return $value;
+        $value = $cleanRelative($value);
+        if (str_starts_with($value, 'http')) return $value;
         return asset('storage/' . $value);
+    }
+
+    public function setVideoUrlAttribute($value): void
+    {
+        if (!$value) {
+            $this->attributes['video_url'] = null;
+            return;
+        }
+
+        if (is_string($value)) {
+            if (str_contains($value, '/storage/')) {
+                $value = explode('/storage/', $value)[1];
+            } elseif (str_starts_with($value, 'storage/')) {
+                $value = substr($value, 8);
+            }
+        }
+
+        $this->attributes['video_url'] = $value;
     }
 
     public function getImageUrlAttribute()
