@@ -62,6 +62,18 @@ class AccommodationReconciliationTest extends TestCase
         $this->assertContains('revenue_amount_mismatch', $this->issueNames());
     }
 
+    public function test_refunded_booking_without_refund_evidence_is_flagged(): void
+    {
+        $booking = $this->booking();
+        $booking->update(['paid_at' => now(), 'status' => 'confirmed', 'payment_method' => 'flutterwave']);
+        $booking->update(['status' => 'refunded']);
+
+        $this->assertContains('refund_status_without_evidence', $this->issueNames());
+        $this->assertDatabaseMissing('accommodation_ledgers', [
+            'booking_id' => $booking->id, 'type' => 'refund',
+        ]);
+    }
+
     public function test_cancellation_does_not_forge_refund_evidence(): void
     {
         $booking = $this->booking();
