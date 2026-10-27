@@ -76,3 +76,18 @@ jobs:
         run: |
           php artisan migrate --force
           php artisan migrate:status
+
+  dashboard-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend build dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile Filament dashboard utility stylesheet
+        run: |
+          npm run build
+          test -f public/build/manifest.json
+          node -e "const m = require('./public/build/manifest.json'); if (!m['resources/css/filament-dashboard.css']) process.exit(1);"
