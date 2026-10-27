@@ -157,3 +157,51 @@ html:not(.dark) .fi-main .fi-btn:not(.fi-color-primary):not(.fi-color-danger).fi
 html:not(.dark) .fi-main .fi-form-actions a.fi-color-gray {
     color: #334155;
 }
+
+/*
+ * Booking editor: scope contrast overrides to this resource form.
+ * Preserve all fields, selections, payment status and upload behaviour.
+ */
+html:not(.dark) .insignia-booking-form {
+    color: #172033;
+}
+html:not(.dark) .insignia-booking-form .fi-fo-field-wrp-label,
+html:not(.dark) .insignia-booking-form .fi-fo-field-wrp-label span,
+html:not(.dark) .insignia-booking-form .fi-fo-field-wrp-label label,
+html:not(.dark) .insignia-booking-form .fi-fo-field-wrp-helper-text,
+html:not(.dark) .insignia-booking-form .fi-select-input,
+html:not(.dark) .insignia-booking-form .fi-input,
+html:not(.dark) .insignia-booking-form input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) .insignia-booking-form textarea {
+    color: #172033;
+}
+html:not(.dark) .insignia-booking-form .fi-input-wrp {
+    background: #fff;
+    color: #172033;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.625rem;
+}
+html:not(.dark) .insignia-booking-form .fi-input,
+html:not(.dark) .insignia-booking-form input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) .insignia-booking-form textarea {
+    background: transparent;
+    caret-color: #172033;
+}
+html:not(.dark) .insignia-booking-form input::placeholder {
+    color: #64748b;
+}
+html:not(.dark) .insignia-booking-form .fi-input-wrp:focus-within {
+    border-color: #a84781;
+    outline: 2px solid rgb(168 71 129 / 18%);
+    outline-offset: 1px;
+}
+/* Tom Select-style selected value labels and removal controls. */
+html:not(.dark) .insignia-booking-form .fi-select-input .item,
+html:not(.dark) .insignia-booking-form .ts-control,
+html:not(.dark) .insignia-booking-form .ts-control .item {
+    color: #172033;
+}
+html.dark .insignia-booking-form .fi-fo-field-wrp-label,
+html.dark .insignia-booking-form .fi-fo-field-wrp-label span {
+    color: #f3f6fc;
+}
