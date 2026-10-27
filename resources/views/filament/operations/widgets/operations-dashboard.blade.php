@@ -273,7 +273,7 @@
                             </h3>
 
                             {{-- Dynamic Suite Details / Guest Information --}}
-                            @if($room->status === 'occupied' && $room->activeBooking?->user)
+                            @if($room->status === 'occupied' && $room->activeBooking?->user && !auth()->user()?->isStaff())
                                 <div class="mt-3 p-3 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-red-100 dark:border-red-900/30">
                                     <div class="flex items-center gap-2">
                                         <div class="w-7 h-7 rounded-full bg-[#4A0E2E]/10 dark:bg-[#4A0E2E]/30 flex items-center justify-center text-xs font-bold text-[#4A0E2E] dark:text-pink-300">
@@ -295,7 +295,7 @@
                                         <span>🧹</span> Turnover in progress
                                     </p>
                                     <p class="text-[11px] text-amber-700/80 dark:text-amber-400 mt-0.5">
-                                        Linen restocked · Sanitizing surfaces
+                                        {{ $room->housekeeping_notes ?: 'Awaiting cleaning checklist completion and supervisor verification.' }}
                                     </p>
                                 </div>
                             @elseif($room->status === 'maintenance')
@@ -304,16 +304,16 @@
                                         <span>🔧</span> Scheduled repair
                                     </p>
                                     <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                        AC/Appliance maintenance underway
+                                        {{ $room->housekeeping_notes ?: 'Room blocked while maintenance is being assessed.' }}
                                     </p>
                                 </div>
                             @else
                                 <div class="mt-3 p-3 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30">
                                     <p class="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                                        <span>✨</span> Ready for VIP arrival
+                                        <span>✨</span> Available for arrivals
                                     </p>
                                     <p class="text-[11px] text-emerald-700/80 dark:text-emerald-400 mt-0.5">
-                                        ₦{{ number_format($room->price_per_night) }} / night
+                                        Room is currently marked ready for guest check-in
                                     </p>
                                 </div>
                             @endif
@@ -322,12 +322,14 @@
                         {{-- Footer Quick Actions --}}
                         <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between">
                             <span class="text-[11px] text-gray-400 dark:text-gray-500">
-                                {{ $room->housekeeping_notes ? Str::limit($room->housekeeping_notes, 20) : 'Standard Setup' }}
+                                {{ $room->housekeeping_notes ? \Illuminate\Support\Str::limit($room->housekeeping_notes, 24) : 'No room notes' }}
                             </span>
-                            <a href="{{ route('filament.operations.resources.room-statuses.edit', $room) }}"
+                            @if(\App\Filament\Operations\Resources\RoomStatusResource::canEdit($room))
+                            <a href="{{ \App\Filament\Operations\Resources\RoomStatusResource::getUrl('edit', ['record' => $room]) }}"
                                class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md {{ $config['actionBg'] }} transition-colors">
                                 Update Status →
                             </a>
+                            @endif
                         </div>
                     </div>
                 @endforeach
