@@ -34,6 +34,13 @@ class AdminPanelProvider extends PanelProvider
             ->favicon(fn () => asset('images/logo-trimmed.png'))
             ->font('Plus Jakarta Sans')
             ->darkMode(true)
+            // Load custom dashboard utilities alongside (not instead of) Filament v3 CSS.
+            ->renderHook(
+                'panels::head.end',
+                fn (): string => \Illuminate\Support\Facades\Blade::render(
+                    "@vite('resources/css/filament-dashboard.css')"
+                ),
+            )
             ->sidebarCollapsibleOnDesktop()
             ->colors([
                 'primary' => [
