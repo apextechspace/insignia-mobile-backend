@@ -72,6 +72,7 @@ class FoodOrderController extends Controller
                 'type' => $request->type,
                 'payment_reference' => $request->payment_reference,
                 'receipt_url' => $receiptUrl,
+            'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
                 'metadata' => $request->metadata ?? [],
             ]);
 
