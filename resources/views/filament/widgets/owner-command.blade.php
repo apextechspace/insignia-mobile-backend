@@ -28,7 +28,7 @@
                 <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ $paymentExceptions }}</p>
                 <p class="mt-2 text-sm text-rose-800 dark:text-rose-200">Review disputed or conflicting funds <span aria-hidden="true">→</span></p>
             </a>
-            <a href="{{ \App\Filament\Resources\MonthlyStatementResource::getUrl('index', panel: 'operations') }}" class="group rounded-xl border border-violet-200 bg-violet-50 p-4 transition hover:border-violet-400 hover:shadow-sm dark:border-violet-900 dark:bg-violet-950/30">
+            <a href="{{ \App\Filament\Operations\Resources\MonthlyStatementResource::getUrl('index', panel: 'operations') }}" class="group rounded-xl border border-violet-200 bg-violet-50 p-4 transition hover:border-violet-400 hover:shadow-sm dark:border-violet-900 dark:bg-violet-950/30">
                 <p class="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">MCL statements</p>
                 <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ $statementsAwaitingReview }}</p>
                 <p class="mt-2 text-sm text-violet-800 dark:text-violet-200">Statements awaiting owner review <span aria-hidden="true">→</span></p>
