@@ -77,6 +77,25 @@ class ManualTransferReviewResource extends Resource
                         $data['notes']
                     );
                 }),
+            Tables\Actions\Action::make('reject_receipt')
+                ->label('Reject Receipt')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->form([
+                    Forms\Components\Textarea::make('reason')
+                        ->label('Reason for rejection')
+                        ->required()
+                        ->minLength(10)
+                        ->rows(3),
+                ])
+                ->requiresConfirmation()
+                ->action(function (Booking $record, array $data): void {
+                    app(\App\Services\ManualBookingPaymentReview::class)->reject(
+                        $record,
+                        auth()->user(),
+                        $data['reason']
+                    );
+                }),
         ])->defaultSort('created_at', 'desc');
     }
 
