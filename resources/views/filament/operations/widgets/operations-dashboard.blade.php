@@ -305,6 +305,11 @@
                                         </div>
                                     </div>
                                 </div>
+                            @elseif($room->status === 'occupied')
+                                <div class="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/30">
+                                    <p class="text-xs font-semibold text-red-800 dark:text-red-300">Occupied · Active guest stay</p>
+                                    <p class="mt-1 text-[11px] text-red-700 dark:text-red-400">Front desk manages guest details and check-out.</p>
+                                </div>
                             @elseif($room->status === 'cleaning')
                                 <div class="mt-3 p-3 rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40">
                                     <p class="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
