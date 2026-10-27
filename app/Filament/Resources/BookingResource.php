@@ -25,6 +25,7 @@ class BookingResource extends Resource
     {
         return $form
             ->schema([
+                Forms\Components\Group::make([
                 Forms\Components\Select::make('user_id')
                     ->relationship('user', 'name')
                     ->required()
@@ -60,6 +61,10 @@ class BookingResource extends Resource
                     ->disk('public')
                     ->directory('receipts')
                     ->image()
+                    ->columnSpanFull(),
+                ])
+                    ->extraAttributes(['class' => 'insignia-booking-form'])
+                    ->columns(['default' => 1, 'md' => 2])
                     ->columnSpanFull(),
             ]);
     }
