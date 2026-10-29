@@ -114,7 +114,8 @@ class RoomSeeder extends Seeder
         ];
 
         foreach ($rooms as $room) {
-            Room::updateOrCreate(
+            // Bootstrap missing rooms without resetting live prices, media or readiness.
+            Room::firstOrCreate(
                 ['name' => $room['name']],
                 $room
             );
