@@ -21,6 +21,9 @@ class OrderResource extends Resource
 
     protected static ?string $navigationGroup = 'Commerce';
 
+    public static function canDelete($record): bool { return false; }
+    public static function canDeleteAny(): bool { return false; }
+
     public static function form(Form $form): Form
     {
         return $form
@@ -46,6 +49,7 @@ class OrderResource extends Resource
                 Forms\Components\Select::make('status')
                     ->options([
                         'pending' => 'Pending',
+                        'confirmed' => 'Payment Confirmed',
                         'processing' => 'Processing',
                         'shipped' => 'Shipped',
                         'delivered' => 'Delivered',
@@ -83,6 +87,7 @@ class OrderResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'pending' => 'warning',
+                        'confirmed' => 'success',
                         'processing' => 'info',
                         'shipped' => 'primary',
                         'delivered' => 'success',
@@ -138,6 +143,7 @@ class OrderResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'pending' => 'Pending',
+                        'confirmed' => 'Payment Confirmed',
                         'processing' => 'Processing',
                         'shipped' => 'Shipped',
                         'delivered' => 'Delivered',

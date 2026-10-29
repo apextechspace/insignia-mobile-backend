@@ -15,6 +15,7 @@ class RoomController extends Controller
 
     public function show(Room $room)
     {
+        abort_unless($room->is_available && $room->status !== 'maintenance', 404);
         return response()->json($room);
     }
 }

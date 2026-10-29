@@ -18,7 +18,7 @@ class EditFoodOrder extends EditRecord
         if (empty($this->record->paid_at)
             && in_array($data['status'] ?? $this->record->status, ['paid','preparing','delivered'], true)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'status' => 'Verify payment before progressing this transaction.',
+                'data.status' => 'Verify payment before progressing this transaction.',
             ]);
         }
 

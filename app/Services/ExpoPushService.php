@@ -18,12 +18,12 @@ class ExpoPushService
      */
     public static function send($to, $title, $body, $data = [])
     {
-        if (!$to || !str_starts_with($to, 'ExponentPushToken')) {
+        if (!$to || !preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $to)) {
             return false;
         }
 
         try {
-            $response = Http::post('https://exp.host/--/api/v2/push/send', [
+            $response = Http::timeout(20)->post('https://exp.host/--/api/v2/push/send', [
                 'to' => $to,
                 'title' => $title,
                 'body' => $body,
@@ -32,7 +32,7 @@ class ExpoPushService
                 'priority' => 'high',
             ]);
 
-            if ($response->successful()) {
+            if ($response->successful() && $response->json('data.status') === 'ok') {
                 return true;
             }
 

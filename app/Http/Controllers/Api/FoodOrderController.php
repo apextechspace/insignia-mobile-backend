@@ -12,6 +12,15 @@ use Illuminate\Support\Facades\Validator;
 
 class FoodOrderController extends Controller
 {
+    public function index(Request $request)
+    {
+        return response()->json([
+            'status' => 'success',
+            'data' => FoodOrder::where('user_id', $request->user()->id)
+                ->with('items.menuItem')->latest()->get(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -32,8 +41,8 @@ class FoodOrderController extends Controller
             ], 422);
         }
 
-        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
-            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        if ($request->hasFile('receipt')) {
+            return response()->json(['message' => 'Dining payments use Flutterwave. Direct bank transfer is only available for room reservations.'], 422);
         }
 
         try {
@@ -51,8 +60,10 @@ class FoodOrderController extends Controller
             foreach ($request->items as $item) {
                 $menuItem = MenuItem::findOrFail($item['menu_item_id']);
                 
-                if (!$menuItem->is_available) {
-                    throw new \Exception("Item '{$menuItem->name}' is currently unavailable.");
+                if (!$menuItem->is_available || !$menuItem->category?->is_active) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'items' => "Item '{$menuItem->name}' is currently unavailable.",
+                    ]);
                 }
 
                 $itemTotal = $menuItem->price * $item['quantity'];
@@ -72,7 +83,7 @@ class FoodOrderController extends Controller
                 'type' => $request->type,
                 'payment_reference' => $request->payment_reference,
                 'receipt_url' => $receiptUrl,
-            'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
+                'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
                 'metadata' => $request->metadata ?? [],
             ]);
 
@@ -89,11 +100,15 @@ class FoodOrderController extends Controller
                 'data' => $order->load('items.menuItem')
             ], 201);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('Dining order failed', ['exception' => $e]);
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to place order: ' . $e->getMessage()
+                'message' => 'Unable to place your dining order. Please try again.'
             ], 500);
         }
     }

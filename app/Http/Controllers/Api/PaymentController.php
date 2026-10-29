@@ -35,7 +35,15 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'order_type' => 'required|in:booking,order,food_order,service_booking',
             'order_id'   => 'required|integer',
+            'redirect_url' => 'nullable|string|max:2048',
         ]);
+
+        $redirectBase = $validated['redirect_url'] ?? 'insignia://payment-complete';
+        $webReturn = config('services.flutterwave.web_return_url');
+        if ($redirectBase !== 'insignia://payment-complete'
+            && (!$webReturn || !str_starts_with($webReturn, 'https://') || $redirectBase !== $webReturn)) {
+            return response()->json(['message' => 'Payment return URL is not configured for this app. Please contact support.'], 422);
+        }
 
         $user = $request->user();
         $orderType = $validated['order_type'];
@@ -86,6 +94,11 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'This transaction is no longer payable.'], 409);
         }
 
+        if ($record instanceof Order && !$record->stock_deducted
+            && (!$record->product || $record->product->stock < $record->quantity)) {
+            return response()->json(['status' => 'error', 'message' => 'This item is no longer available in the requested quantity.'], 409);
+        }
+
         // Every checkout attempt is retained, even if a later attempt replaces
         // the compatibility reference on the original payable.
         PaymentAttempt::create([
@@ -112,7 +125,9 @@ class PaymentController extends Controller
             'customer_name'       => $user->name,
             'user_phone'          => $user->phone ?? '+2348000000000',
             'user_email'          => $user->email,
-            'redirect_url'        => "insignia://payment-complete?reference={$reference}&order_type={$orderType}&order_id={$orderId}",
+            'redirect_url'        => $redirectBase . (str_contains($redirectBase, '?') ? '&' : '?') . http_build_query([
+                'reference' => $reference, 'order_type' => $orderType, 'order_id' => $orderId,
+            ]),
             'meta'                => [
                 'order_type' => $orderType,
                 'order_id'   => $orderId,
@@ -274,11 +289,14 @@ class PaymentController extends Controller
             if ($model instanceof Booking) {
                 \App\Models\Room::whereKey($model->room_id)->lockForUpdate()->firstOrFail();
             }
+            if ($model instanceof Order) {
+                \App\Models\Product::whereKey($model->product_id)->lockForUpdate()->first();
+            }
 
             $record = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
             $attempt = PaymentAttempt::whereKey($attempt->getKey())->lockForUpdate()->firstOrFail();
 
-            if ($attempt->status === 'confirmed') {
+            if (in_array($attempt->status, ['confirmed', 'needs_review'], true)) {
                 return null; // Webhook replay, no additional notification.
             }
 
@@ -324,6 +342,16 @@ class PaymentController extends Controller
                     $this->flagPaymentForReview($attempt, $externalId, 'room_date_conflict');
                     return null;
                 }
+            }
+
+            if ($record instanceof Order && !$record->stock_deducted) {
+                $product = \App\Models\Product::whereKey($record->product_id)->first();
+                if (!$product || $product->stock < $record->quantity) {
+                    $this->flagPaymentForReview($attempt, $externalId, 'product_out_of_stock');
+                    return null;
+                }
+                $product->decrement('stock', $record->quantity);
+                $record->stock_deducted = true;
             }
 
             $record->status = $record instanceof FoodOrder ? 'paid' : 'confirmed';
@@ -395,6 +423,8 @@ class PaymentController extends Controller
                 }
             }
 
+            app(\App\Services\CustomerPaymentEmailService::class)->send($record);
+
             return ['user' => $record->user, 'title' => $title];
         }, 3);
 
@@ -402,27 +432,18 @@ class PaymentController extends Controller
             return false;
         }
 
-        // Push is best effort. A temporary Expo failure must not invalidate a
-        // committed, gateway-verified payment or lose its database notifications.
-        try {
-            $this->sendConfirmationNotification(
-                $notification['user'],
-                $notification['title'],
-                'Your payment has been verified and confirmed.'
-            );
-        } catch (\Throwable $e) {
-            Log::warning('Payment confirmed; push delivery failed', ['message' => $e->getMessage()]);
-        }
+        // Each recipient's push and the customer email are queued separately.
         return true;
     }
 
     protected function flagPaymentForReview(PaymentAttempt $attempt, string $externalId, string $reason): void
     {
         // Keep the provider transaction evidence while withholding fulfillment.
-        $attempt->update([
-            'status' => 'needs_review',
-            'provider_transaction_id' => $externalId,
-        ]);
+        $changes = ['status' => 'needs_review'];
+        if (!$attempt->provider_transaction_id && !PaymentAttempt::where('provider_transaction_id', $externalId)->exists()) {
+            $changes['provider_transaction_id'] = $externalId;
+        }
+        $attempt->update($changes);
 
         \App\Models\PaymentReconciliationCase::updateOrCreate(
             ['payment_reference' => $attempt->reference],
@@ -435,6 +456,11 @@ class PaymentController extends Controller
                 'status' => 'needs_review',
             ]
         );
+        foreach (\App\Models\User::whereIn('role', [
+            \App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_IPL_ADMIN,
+        ])->get() as $financeUser) {
+            $financeUser->notify(new \App\Notifications\PaymentReviewRequired($attempt->reference, $reason));
+        }
         Log::warning('Verified Flutterwave payment requires reconciliation', [
             'reference' => $attempt->reference,
             'reason' => $reason,
@@ -467,11 +493,4 @@ class PaymentController extends Controller
             ->first();
     }
 
-    protected function sendConfirmationNotification($user, string $title, string $message)
-    {
-        if ($user && !empty($user->expo_push_token)) {
-            \App\Jobs\DeliverPaymentPush::dispatch($user->getKey(), $title, $message)
-                ->afterCommit();
-        }
-    }
 }

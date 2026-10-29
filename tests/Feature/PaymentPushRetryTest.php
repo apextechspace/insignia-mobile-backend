@@ -38,4 +38,12 @@ class PaymentPushRetryTest extends TestCase
         (new DeliverPaymentPush($user->id, 'Paid', 'Verified'))->handle();
         Http::assertNothingSent();
     }
+
+    public function test_ticket_error_in_successful_http_response_retries(): void
+    {
+        Http::fake(['exp.host/*' => Http::response(['data' => ['status' => 'error']], 200)]);
+        $user = User::factory()->create(['expo_push_token' => 'ExpoPushToken[test-token]']);
+        $this->expectException(RuntimeException::class);
+        (new DeliverPaymentPush($user->id, 'Paid', 'Verified'))->handle();
+    }
 }

@@ -21,6 +21,9 @@ class ServiceBookingResource extends Resource
 
     protected static ?string $navigationGroup = 'Concierge';
 
+    public static function canDelete($record): bool { return false; }
+    public static function canDeleteAny(): bool { return false; }
+
     public static function form(Form $form): Form
     {
         return $form

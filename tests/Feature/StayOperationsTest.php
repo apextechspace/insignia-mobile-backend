@@ -14,6 +14,12 @@ class StayOperationsTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function registration(): array
+    {
+        return ['full_name' => 'Arriving Guest', 'phone' => '+2348000000000',
+            'adults' => 2, 'children' => 1, 'identity_verified' => true, 'notes' => 'Late arrival'];
+    }
+
     private function stay(bool $paid = true): Booking
     {
         $room = Room::create([
@@ -39,12 +45,15 @@ class StayOperationsTest extends TestCase
         $operator = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]);
         $service = app(StayOperationsService::class);
 
-        $service->checkIn($booking, $operator);
+        $service->checkIn($booking, $operator, $this->registration());
         $this->assertNotNull($booking->fresh()->checked_in_at);
+        $this->assertSame($operator->id, $booking->fresh()->checked_in_by);
+        $this->assertSame('Arriving Guest', $booking->fresh()->guest_registration['full_name']);
         $this->assertSame('occupied', $booking->room->fresh()->status);
 
         $service->checkOut($booking, $operator);
         $this->assertNotNull($booking->fresh()->checked_out_at);
+        $this->assertSame($operator->id, $booking->fresh()->checked_out_by);
         $this->assertSame('completed', $booking->fresh()->status);
         $this->assertSame('cleaning', $booking->room->fresh()->status);
     }
@@ -70,7 +79,7 @@ class StayOperationsTest extends TestCase
         $booking = $this->stay();
         $operator = User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS]);
         $service = app(StayOperationsService::class);
-        $service->checkIn($booking, $operator);
+        $service->checkIn($booking, $operator, $this->registration());
         $this->expectException(ValidationException::class);
         $service->checkIn($booking, $operator);
     }

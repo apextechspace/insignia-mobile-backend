@@ -21,6 +21,11 @@ class BookingResource extends Resource
 
     protected static ?string $navigationGroup = 'Hospitality';
 
+    public static function canEdit($record): bool
+    {
+        return parent::canEdit($record) && !$record->paid_at && !$record->checked_in_at && !$record->checked_out_at;
+    }
+
     public static function form(Form $form): Form
     {
         return $form

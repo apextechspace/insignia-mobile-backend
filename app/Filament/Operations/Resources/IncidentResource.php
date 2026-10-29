@@ -106,6 +106,8 @@ class IncidentResource extends Resource
                     ->schema([
                         Forms\Components\Select::make('status')
                             ->label('Status')
+                            ->default('reported')
+                            ->required()
                             ->options([
                                 'reported'             => 'Reported',
                                 'under_investigation'  => 'Under Investigation',
@@ -131,6 +133,7 @@ class IncidentResource extends Resource
                             ->label('Associated Cost (₦)')
                             ->numeric()
                             ->prefix('₦')
+                            ->dehydrateStateUsing(fn ($state) => blank($state) ? 0 : $state)
                             ->default(0),
                     ])->columns(2),
             ]);

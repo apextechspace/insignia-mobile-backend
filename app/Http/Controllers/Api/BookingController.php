@@ -50,7 +50,7 @@ class BookingController extends Controller
 
             $nights = (new \DateTimeImmutable($validated['check_in']))
                 ->diff(new \DateTimeImmutable($validated['check_out']))->days;
-            $totalPrice = $nights * $room->price_per_night + 25000;
+            $totalPrice = $nights * $room->price_per_night;
 
             $receiptUrl = $request->hasFile('receipt')
                 ? $request->file('receipt')->store('receipts', 'public') : null;

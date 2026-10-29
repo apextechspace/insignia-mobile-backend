@@ -64,6 +64,7 @@ class PaymentReconciliationCaseResource extends Resource
                 Tables\Filters\SelectFilter::make('reason')
                     ->options([
                         'room_date_conflict' => 'Room dates conflict',
+                        'product_out_of_stock' => 'Product stock unavailable after payment',
                         'payable_inactive' => 'Booking or order inactive',
                         'already_paid_other_attempt' => 'Duplicate payment',
                         'payable_amount_changed' => 'Price changed after checkout',

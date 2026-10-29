@@ -24,6 +24,7 @@ class DeliverPaymentPush implements ShouldQueue
         public int $userId,
         public string $title,
         public string $message,
+        public array $data = [],
     ) {}
 
     public function handle(): void
@@ -33,9 +34,8 @@ class DeliverPaymentPush implements ShouldQueue
             return;
         }
 
-        if (!ExpoPushService::send($user->expo_push_token, $this->title, $this->message, [
-            'type' => 'payment_confirmation',
-        ])) {
+        if (!ExpoPushService::send($user->expo_push_token, $this->title, $this->message,
+            $this->data ?: ['type' => 'payment_activity'])) {
             // ExpoPushService returns false for HTTP errors as well as failures;
             // throwing lets the queue driver retry instead of silently dropping.
             throw new RuntimeException('Expo declined payment push delivery.');

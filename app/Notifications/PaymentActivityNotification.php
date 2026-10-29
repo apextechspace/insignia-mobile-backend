@@ -15,7 +15,7 @@ class PaymentActivityNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', \App\Notifications\Channels\PaymentPushChannel::class];
     }
 
     public function toArray(object $notifiable): array

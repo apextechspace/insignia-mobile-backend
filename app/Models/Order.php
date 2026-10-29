@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    use \App\Models\Concerns\ProtectsPaidDetails;
+
+    protected array $paidDetailFields = ['user_id', 'product_id', 'quantity', 'total_price'];
+
+    protected $casts = ['stock_deducted' => 'boolean', 'total_price' => 'decimal:2'];
+
     protected $fillable = [
         'user_id',
         'product_id',

@@ -45,7 +45,7 @@ class ProfileController extends Controller
         }
 
         if (!Hash::check($request->pin, $user->security_pin)) {
-            return response()->json(['message' => 'Invalid Executive Security PIN.'], 401);
+            return response()->json(['message' => 'Invalid Executive Security PIN.'], 422);
         }
 
         return response()->json(['message' => 'Access Granted.', 'verified' => true]);
@@ -94,12 +94,17 @@ class ProfileController extends Controller
     public function updatePushToken(Request $request)
     {
         $request->validate([
-            'token' => 'required|string'
+            'token' => ['required', 'string', 'max:255', 'regex:/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/'],
         ]);
 
         $user = $request->user();
-        $user->expo_push_token = $request->token;
-        $user->save();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user, $request): void {
+            // A device shared by two accounts must only receive the current account's alerts.
+            \App\Models\User::where('expo_push_token', $request->token)
+                ->whereKeyNot($user->id)->update(['expo_push_token' => null]);
+            $user->expo_push_token = $request->token;
+            $user->save();
+        });
 
         return response()->json(['message' => 'Communication channel established.']);
     }

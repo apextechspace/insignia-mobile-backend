@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Room extends Model
 {
+    protected $hidden = ['housekeeping_notes'];
+
     protected static function booted(): void
     {
         static::updating(function (Room $room): void {
