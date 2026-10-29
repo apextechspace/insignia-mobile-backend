@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Room;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class StayOperationsService
@@ -20,11 +21,11 @@ class StayOperationsService
         }
     }
 
-    public function checkIn(Booking $booking, User $staff): void
+    public function checkIn(Booking $booking, User $staff, array $guestDetails = []): void
     {
         $this->authorize($staff);
 
-        DB::transaction(function () use ($booking) {
+        DB::transaction(function () use ($booking, $staff, $guestDetails) {
             $room = Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
             $stay = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
 
@@ -33,7 +34,9 @@ class StayOperationsService
                 throw ValidationException::withMessages(['booking' => 'A confirmed paid reservation is required for check-in.']);
             }
             if (today()->toDateString() < $stay->check_in || today()->toDateString() >= $stay->check_out) {
-                throw ValidationException::withMessages(['booking' => 'Check-in is outside the booked stay dates.']);
+                throw ValidationException::withMessages([
+                    'booking' => "Check-in is available from {$stay->check_in} until before {$stay->check_out}. Today is " . today()->toDateString() . '.',
+                ]);
             }
             if (!in_array($room->status, ['available', 'reserved'], true)) {
                 throw ValidationException::withMessages(['room' => 'Suite is not ready for check-in.']);
@@ -44,7 +47,20 @@ class StayOperationsService
                 throw ValidationException::withMessages(['room' => 'Another guest is currently checked into this suite.']);
             }
 
-            $stay->forceFill(['checked_in_at' => now()])->save();
+            $registration = Validator::make($guestDetails, [
+                'full_name' => ['required', 'string', 'max:255'],
+                'phone' => ['required', 'string', 'max:40'],
+                'adults' => ['required', 'integer', 'min:1', 'max:20'],
+                'children' => ['required', 'integer', 'min:0', 'max:20'],
+                'identity_verified' => ['required', 'accepted'],
+                'notes' => ['nullable', 'string', 'max:2000'],
+            ])->validate();
+
+            $stay->forceFill([
+                'checked_in_at' => now(),
+                'checked_in_by' => $staff->id,
+                'guest_registration' => $registration,
+            ])->save();
             $room->update(['status' => 'occupied']);
         }, 3);
     }
@@ -53,7 +69,7 @@ class StayOperationsService
     {
         $this->authorize($staff);
 
-        DB::transaction(function () use ($booking) {
+        DB::transaction(function () use ($booking, $staff) {
             $room = Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
             $stay = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
 
@@ -65,7 +81,9 @@ class StayOperationsService
                 throw ValidationException::withMessages(['room' => 'Room occupancy state must be reviewed before check-out.']);
             }
 
-            $stay->forceFill(['checked_out_at' => now(), 'status' => 'completed'])->save();
+            $stay->forceFill([
+                'checked_out_at' => now(), 'checked_out_by' => $staff->id, 'status' => 'completed',
+            ])->save();
             $room->update(['status' => 'cleaning']);
             // Generate a new checklist for every real guest departure.
             // This happens in the same transaction as check-out.

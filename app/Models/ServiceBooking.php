@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class ServiceBooking extends Model
 {
+    use \App\Models\Concerns\ProtectsPaidDetails;
+
+    protected array $paidDetailFields = ['user_id', 'service_id', 'service_variant_id', 'total_price'];
+
     protected $fillable = [
         'user_id',
         'service_id',
@@ -28,6 +32,7 @@ class ServiceBooking extends Model
     ];
 
     protected $casts = [
+        'total_price' => 'decimal:2',
         'metadata' => 'json',
         'scheduled_at' => 'datetime',
     ];

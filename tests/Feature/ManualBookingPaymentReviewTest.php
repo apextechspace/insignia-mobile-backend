@@ -34,6 +34,7 @@ class ManualBookingPaymentReviewTest extends TestCase
 
     public function test_admin_verified_credit_confirms_booking_once_and_notifies_guest(): void
     {
+        \Illuminate\Support\Facades\Queue::fake();
         $booking = $this->booking();
         $reviewer = User::factory()->create(['role' => User::ROLE_IPL_ADMIN]);
 
@@ -50,6 +51,12 @@ class ManualBookingPaymentReviewTest extends TestCase
         ]);
         $this->assertDatabaseCount('accommodation_ledgers', 1);
         $this->assertTrue($booking->user->notifications()->exists());
+        \Illuminate\Support\Facades\Queue::assertPushed(\Illuminate\Notifications\SendQueuedNotifications::class, function ($job) use ($booking) {
+            return $job->notification instanceof \App\Notifications\CustomerPaymentEmail
+                && $job->notifiables->first()->id === $booking->user_id
+                && $job->notification->details['receipt'] === true
+                && $job->notification->details['reference'] === 'TEST-BANK-001';
+        });
     }
 
     public function test_non_owner_cannot_approve_manual_transfer(): void

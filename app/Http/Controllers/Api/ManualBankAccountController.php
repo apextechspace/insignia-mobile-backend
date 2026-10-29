@@ -8,10 +8,11 @@ use Illuminate\Http\JsonResponse;
 
 class ManualBankAccountController extends Controller
 {
-    public function show(): JsonResponse
+    public function show(\Illuminate\Http\Request $request): JsonResponse
     {
+        $validated = $request->validate(['order_type' => 'sometimes|in:booking,order,food_order,service_booking']);
         $account = ManualBankAccount::current();
-        $ready = ManualBankAccount::isReady();
+        $ready = ($validated['order_type'] ?? 'booking') === 'booking' && ManualBankAccount::isReady();
 
         return response()->json([
             'is_configured' => $ready,

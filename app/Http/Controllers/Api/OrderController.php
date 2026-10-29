@@ -19,8 +19,8 @@ class OrderController extends Controller
     {
         $validated = $request->validated();
 
-        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
-            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        if ($request->hasFile('receipt')) {
+            return response()->json(['message' => 'Boutique payments use Flutterwave. Direct bank transfer is only available for room reservations.'], 422);
         }
 
         $receiptUrl = null;
@@ -36,18 +36,15 @@ class OrderController extends Controller
             return response()->json(['message' => 'Insufficient stock. Only ' . $product->stock . ' items remaining.'], 422);
         }
 
-        $totalPrice = ($product->price * $validated['quantity']) + 5000; // Adding delivery fee
-
-        // 🚨 CRITICAL: Reduce stock
-        $product->decrement('stock', $validated['quantity']);
+        $totalPrice = $product->price * $validated['quantity'];
 
         $order = $request->user()->orders()->create([
             'product_id' => $validated['product_id'],
             'quantity' => $validated['quantity'],
             'total_price' => $totalPrice,
-            'notes' => $validated['notes'],
+            'notes' => $validated['notes'] ?? null,
             'status' => 'pending',
-            'payment_reference' => $validated['payment_reference'],
+            'payment_reference' => $validated['payment_reference'] ?? null,
             'receipt_url' => $receiptUrl,
             'payment_method' => $receiptUrl ? 'bank_transfer' : 'flutterwave',
             'delivery_location' => $validated['delivery_location'] ?? null,

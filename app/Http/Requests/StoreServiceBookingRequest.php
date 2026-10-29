@@ -29,6 +29,7 @@ class StoreServiceBookingRequest extends FormRequest
             'time' => 'nullable|string',
             'notes' => 'nullable|string',
             'payment_reference' => 'nullable|string',
+            'payment_method' => 'nullable|string|in:flutterwave,bank_transfer',
             'receipt' => 'nullable|image|max:5120',
             // Metadata fields for dynamic forms
             'check_in' => 'nullable|date',

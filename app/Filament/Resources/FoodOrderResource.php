@@ -18,6 +18,9 @@ class FoodOrderResource extends Resource
     protected static ?string $navigationGroup = 'Dining Management';
     protected static ?string $navigationLabel = 'Food Orders';
 
+    public static function canDelete($record): bool { return false; }
+    public static function canDeleteAny(): bool { return false; }
+
     public static function form(Form $form): Form
     {
         return $form

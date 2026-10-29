@@ -34,7 +34,10 @@ class RoomTurnoverTest extends TestCase
         ]);
         $operator = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]);
         $service = app(StayOperationsService::class);
-        $service->checkIn($booking, $operator);
+        $service->checkIn($booking, $operator, [
+            'full_name' => 'Arriving Guest', 'phone' => '+2348000000000',
+            'adults' => 1, 'children' => 0, 'identity_verified' => true,
+        ]);
         $service->checkOut($booking, $operator);
         return [$room->fresh(), $operator, $booking];
     }

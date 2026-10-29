@@ -3,8 +3,6 @@ name: Laravel payment tests
 on:
   pull_request:
   push:
-    branches:
-      - fix/payment-verification-integrity-20261026
 
 jobs:
   laravel:
@@ -36,7 +34,7 @@ jobs:
           QUEUE_CONNECTION: sync
           CACHE_STORE: array
           SESSION_DRIVER: array
-        run: php artisan test tests/Feature/FlutterwaveWebhookSecurityTest.php tests/Feature/FlutterwaveCheckoutRetryTest.php tests/Feature/FlutterwaveTransactionIntegrityTest.php tests/Feature/BookingLedgerIntegrityTest.php tests/Feature/PaymentReconciliationAccessTest.php tests/Feature/ManualBookingPaymentReviewTest.php tests/Feature/BookingDashboardSynchronizationTest.php tests/Feature/DiningPaymentRoutingTest.php tests/Feature/StayOperationsTest.php tests/Feature/RoomTurnoverTest.php tests/Feature/RoomReadinessInvariantTest.php tests/Feature/HousekeepingCompletionGuardTest.php tests/Feature/FinanceAccessBoundaryTest.php tests/Feature/FinanceResourceRoleTest.php tests/Feature/GuestRoomAvailabilityTest.php tests/Feature/BookingCreationLockTest.php tests/Feature/PaymentPushRetryTest.php tests/Feature/AccommodationReconciliationTest.php tests/Feature/RoomStatusRoleTest.php tests/Feature/IplMasterStatementTest.php tests/Feature/ManualBankAccountSettingsTest.php
+        run: php artisan test
 
   mysql-smoke:
     runs-on: ubuntu-latest

@@ -18,8 +18,18 @@ class EditServiceBooking extends EditRecord
         if (empty($this->record->paid_at)
             && in_array($data['status'] ?? $this->record->status, ['confirmed','in-progress','completed'], true)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'status' => 'Verify payment before progressing this transaction.',
+                'data.status' => 'Verify payment before progressing this transaction.',
             ]);
+        }
+
+        if ($this->record->paid_at) {
+            foreach (['user_id', 'service_id', 'service_variant_id', 'total_price'] as $field) {
+                if (array_key_exists($field, $data) && (float) $data[$field] !== (float) $this->record->{$field}) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'data.' . $field => 'Paid service details cannot be changed. Use a separate adjustment or booking.',
+                    ]);
+                }
+            }
         }
 
         return $data;

@@ -13,6 +13,9 @@ class CreateServiceBookingAction
     public function execute(array $data): ServiceBooking
     {
         $service = Service::findOrFail($data['service_id']);
+        if (!$service->is_active) {
+            throw ValidationException::withMessages(['service_id' => 'This service is currently unavailable.']);
+        }
 
         // 1. Validate Variant Requirements
         $variant = null;
@@ -30,6 +33,10 @@ class CreateServiceBookingAction
         $metadata = $this->prepareMetadata($service, $data);
 
         // 4. Create Booking
+        $paymentMethod = !empty($data['payment_method'])
+            ? $data['payment_method']
+            : (!empty($data['receipt_url']) ? 'bank_transfer' : 'flutterwave');
+
         return ServiceBooking::create([
             'user_id' => Auth::id() ?? $data['user_id'], // Fallback for testing/seeding
             'service_id' => $service->id,
@@ -42,7 +49,7 @@ class CreateServiceBookingAction
             'status' => 'pending',
             'payment_reference' => $data['payment_reference'] ?? null,
             'receipt_url' => $data['receipt_url'] ?? null,
-            'payment_method' => !empty($data['receipt_url']) ? 'bank_transfer' : null,
+            'payment_method' => $paymentMethod,
             'metadata' => $metadata,
         ]);
     }

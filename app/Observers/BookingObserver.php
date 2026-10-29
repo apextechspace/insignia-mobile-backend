@@ -19,6 +19,7 @@ class BookingObserver
         }
 
         \Illuminate\Support\Facades\DB::afterCommit(function () use ($booking): void {
+            app(\App\Services\CustomerPaymentEmailService::class)->send($booking, false);
             $roomName = $booking->room?->name ?? 'Suite';
             $recipients = \App\Models\User::whereIn('role', [
                 \App\Models\User::ROLE_ADMIN,

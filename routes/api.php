@@ -19,6 +19,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/inventory', [App\Http\Controllers\Api\InventoryController::class, 'index']);
 
     // Secure Profile Routes
     Route::post('/user/setup-pin', [ProfileController::class, 'setupPin']);
@@ -28,22 +29,14 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     Route::get('/payment-methods/manual-bank', [App\Http\Controllers\Api\ManualBankAccountController::class, 'show']);
 
-    Route::get('/rooms', [RoomController::class, 'index']);
-    Route::get('/rooms/{room}', [RoomController::class, 'show']);
-
-    Route::get('/services', [ServiceController::class, 'index']);
-    
-    Route::get('/products', [App\Http\Controllers\Api\ProductController::class, 'index']);
-    Route::get('/products/{product}', [App\Http\Controllers\Api\ProductController::class, 'show']);
 
     // Order related routes
     Route::get('/orders', [App\Http\Controllers\Api\OrderController::class, 'index']);
     Route::post('/orders', [App\Http\Controllers\Api\OrderController::class, 'store']);
 
     // Dining (Food Ordering) related routes
-    Route::get('/menu/categories', [App\Http\Controllers\Api\FoodMenuController::class, 'categories']);
-    Route::get('/menu', [App\Http\Controllers\Api\FoodMenuController::class, 'index']);
     Route::post('/food-orders', [App\Http\Controllers\Api\FoodOrderController::class, 'store']);
+    Route::get('/food-orders', [App\Http\Controllers\Api\FoodOrderController::class, 'index']);
     Route::get('/food-orders/{id}', [App\Http\Controllers\Api\FoodOrderController::class, 'show']);
 
     // Booking related routes
@@ -81,5 +74,14 @@ Route::post('/payments/webhook/flutterwave', [App\Http\Controllers\Api\PaymentCo
 // Legacy OPay webhook intentionally disabled; historical transaction data is preserved.
 
 // Public access for guests (optional, depending on requirements)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/rooms', [RoomController::class, 'index']);
+    Route::get('/rooms/{room}', [RoomController::class, 'show']);
+    Route::get('/services', [ServiceController::class, 'index']);
+    Route::get('/products', [App\Http\Controllers\Api\ProductController::class, 'index']);
+    Route::get('/products/{product}', [App\Http\Controllers\Api\ProductController::class, 'show']);
+    Route::get('/menu/categories', [App\Http\Controllers\Api\FoodMenuController::class, 'categories']);
+    Route::get('/menu', [App\Http\Controllers\Api\FoodMenuController::class, 'index']);
+});
 Route::get('/rooms-public', [RoomController::class, 'index']);
 Route::get('/services-public', [ServiceController::class, 'index']);

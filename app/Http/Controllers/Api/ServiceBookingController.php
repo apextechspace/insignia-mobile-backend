@@ -20,8 +20,8 @@ class ServiceBookingController extends Controller
     {
         $validated = $request->validated();
 
-        if ($request->hasFile('receipt') && !\App\Models\ManualBankAccount::isReady()) {
-            return response()->json(['message' => 'Manual bank transfer is currently unavailable. Please use Flutterwave.'], 422);
+        if ($request->hasFile('receipt') || ($validated['payment_method'] ?? null) === 'bank_transfer') {
+            return response()->json(['message' => 'Service payments use Flutterwave. Direct bank transfer is only available for room reservations.'], 422);
         }
 
         $receiptUrl = null;
@@ -30,9 +30,12 @@ class ServiceBookingController extends Controller
             $receiptUrl = $path;
         }
 
+        $paymentMethod = $validated['payment_method'] ?? ($receiptUrl ? 'bank_transfer' : 'flutterwave');
+
         $serviceBooking = $createServiceBookingAction->execute(array_merge($validated, [
             'user_id' => $request->user()->id,
             'receipt_url' => $receiptUrl,
+            'payment_method' => $paymentMethod,
         ]));
 
         return response()->json($serviceBooking->load(['service', 'variant']), 201);

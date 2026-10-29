@@ -62,6 +62,7 @@ class ManualBookingPaymentReview
             $record->update(['paid_at' => now(), 'payment_method' => 'bank_transfer', 'status' => 'confirmed']);
             // Database notifications are committed atomically with payment and ledger.
             $this->notifyBooking($record->id, true);
+            app(CustomerPaymentEmailService::class)->send($record, true, $bankReference);
             return $record->id;
         }, 3);
 
