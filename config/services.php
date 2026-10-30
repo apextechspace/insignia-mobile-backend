@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'guest_access' => ['frontend_url' => env('GUEST_FRONTEND_URL', 'https://stay.insigniacourts.com')],
 
     /*
     |--------------------------------------------------------------------------

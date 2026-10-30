@@ -38,12 +38,8 @@ class ManualBookingPaymentReview
                 throw ValidationException::withMessages(['bank_transaction_reference' => 'This bank transaction has already been reviewed.']);
             }
 
-            $conflict = Booking::where('room_id', $record->room_id)
-                ->whereKeyNot($record->id)
-                ->whereIn('status', ['confirmed', 'paid', 'completed'])
-                ->where('check_in', '<', $record->check_out)
-                ->where('check_out', '>', $record->check_in)
-                ->exists();
+            $conflict = RoomAvailability::blocking($record->check_in, $record->check_out, $record->id)
+                ->where('room_id', $record->room_id)->exists();
             if ($conflict) {
                 throw ValidationException::withMessages(['booking' => 'These room dates are occupied. Escalate the bank transfer for reconciliation.']);
             }

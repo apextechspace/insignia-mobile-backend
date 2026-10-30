@@ -54,6 +54,8 @@ class GuestStayResource extends Resource
     {
         if ($record->checked_out_at) return 'Checked out';
         if ($record->checked_in_at) return 'In house';
+        if (!$record->paid_at && $record->status === 'cancelled') return 'Cancelled';
+        if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return 'Checkout expired';
         if (!$record->paid_at) return 'Awaiting payment';
         if (in_array($record->status, ['confirmed', 'paid'], true)) return 'Awaiting arrival';
         return ucfirst($record->status);
@@ -91,9 +93,9 @@ class GuestStayResource extends Resource
     public static function registrationDefaults(Booking $record): array
     {
         return [
-            'full_name' => $record->user?->name,
-            'phone' => $record->user?->phone,
-            'adults' => 1, 'children' => 0, 'identity_verified' => false,
+            'full_name' => $record->booking_contact['name'] ?? $record->user?->name,
+            'phone' => $record->booking_contact['phone'] ?? $record->user?->phone,
+            'adults' => $record->guests ?: 1, 'children' => 0, 'identity_verified' => false,
         ];
     }
 
@@ -122,6 +124,10 @@ class GuestStayResource extends Resource
                 TextEntry::make('user.name')->label('Booked by')->placeholder('Not provided'),
                 TextEntry::make('user.email')->label('Email')->placeholder('Not provided'),
                 TextEntry::make('user.phone')->label('Phone')->placeholder('Not provided'),
+                TextEntry::make('booking_contact.name')->label('Lead guest name')->placeholder('Not provided'),
+                TextEntry::make('booking_contact.phone')->label('Lead guest phone')->placeholder('Not provided'),
+                TextEntry::make('guests')->label('Guests'),
+                TextEntry::make('special_requests')->label('Booking requests')->placeholder('None')->columnSpanFull(),
             ])->columns(3),
             Section::make('Payment verification')->schema([
                 TextEntry::make('total_price')->label('Reservation total')->money('NGN'),

@@ -25,4 +25,5 @@
 </td></tr>
 <tr><td style="padding:24px 32px;background:#f3eef0;color:#4a0e2e;text-align:center;font-size:12px;">INSIGNIA COURTS<br><span style="line-height:2;">Thank you for choosing us.</span></td></tr>
 </table></td></tr></table>
+<p style="text-align:center;font-family:Arial,sans-serif"><a href="{{ rtrim(config('services.guest_access.frontend_url'), '/') }}/access-stay">Manage My Stay — request a secure sign-in link</a></p>
 </body></html>

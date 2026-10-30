@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ProfileController;
 
 Route::middleware('throttle:10,1')->group(function () {
+    Route::post('/guest-access/request', [App\Http\Controllers\Api\GuestAccessController::class, 'requestAccess'])->middleware('throttle:3,1');
+    Route::post('/guest-access/verify', [App\Http\Controllers\Api\GuestAccessController::class, 'verify']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
 });
@@ -19,6 +21,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/user/password', [App\Http\Controllers\Api\GuestAccessController::class, 'setPassword']);
     Route::get('/inventory', [App\Http\Controllers\Api\InventoryController::class, 'index']);
 
     // Secure Profile Routes
@@ -42,6 +45,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     // Booking related routes
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::get('/bookings', [BookingController::class, 'index']);
+    Route::post('/bookings/{booking}/cancel-checkout', [BookingController::class, 'cancelCheckout']);
     
     // Service Booking related routes
     Route::get('/service-bookings', [App\Http\Controllers\Api\ServiceBookingController::class, 'index']);

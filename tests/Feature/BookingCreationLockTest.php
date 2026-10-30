@@ -47,7 +47,7 @@ class BookingCreationLockTest extends TestCase
         $this->assertDatabaseCount('bookings', 1);
     }
 
-    public function test_two_unpaid_reservations_remain_pending_until_one_is_paid(): void
+    public function test_active_checkout_hold_prevents_a_second_unpaid_reservation(): void
     {
         $room = $this->suite();
         $dates = [
@@ -59,9 +59,9 @@ class BookingCreationLockTest extends TestCase
         $this->actingAs(User::factory()->create())->postJson('/api/bookings', $dates)
             ->assertCreated()->assertJsonPath('status', 'pending');
         $this->actingAs(User::factory()->create())->postJson('/api/bookings', $dates)
-            ->assertCreated()->assertJsonPath('status', 'pending');
+            ->assertUnprocessable();
 
-        $this->assertSame(2, Booking::where('room_id', $room->id)
+        $this->assertSame(1, Booking::where('room_id', $room->id)
             ->where('status', 'pending')->count());
     }
 }

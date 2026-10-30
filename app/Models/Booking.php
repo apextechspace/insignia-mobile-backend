@@ -12,12 +12,14 @@ class Booking extends Model
 
     protected $casts = [
         'total_price' => 'decimal:2',
+        'hold_expires_at' => 'datetime',
+        'booking_contact' => 'array',
         'guest_registration' => 'array',
         'checked_in_at' => 'datetime',
         'checked_out_at' => 'datetime',
     ];
 
-    protected $hidden = ['guest_registration'];
+    protected $hidden = ['guest_registration', 'booking_contact'];
 
     public function checkedInBy()
     {
@@ -31,6 +33,10 @@ class Booking extends Model
 
     protected $fillable = [
         'user_id',
+        'hold_expires_at',
+        'guests',
+        'special_requests',
+        'booking_contact',
         'room_id',
         'check_in',
         'check_out',

@@ -66,6 +66,9 @@ class ViewBooking extends ViewRecord
                     ]),
 
                 Infolists\Components\Section::make('Payment Details')
+                    ->description(fn ($record) => 'Lead guest: ' . ($record->booking_contact['name'] ?? $record->user?->name ?? 'Not provided')
+                        . ' · Phone: ' . ($record->booking_contact['phone'] ?? $record->user?->phone ?? 'Not provided')
+                        . ' · Guests: ' . $record->guests . ' · Requests: ' . ($record->special_requests ?: 'None'))
                     ->schema([
                         Infolists\Components\Grid::make(2)
                             ->schema([

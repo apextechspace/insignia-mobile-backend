@@ -116,6 +116,22 @@ class FlutterwaveTransactionIntegrityTest extends TestCase
         $this->assertInvalidVerification(['amount' => 500]);
     }
 
+    public function test_payment_after_hold_expiry_is_reconciled_once_without_confirming_a_room(): void
+    {
+        $booking = $this->makeBooking();
+        $booking->update(['hold_expires_at' => now()->subMinute()]);
+        $service = Mockery::mock(FlutterwaveService::class);
+        $this->webhook($service);
+        $service->shouldReceive('verifyTransaction')->twice()->with(5151)->andReturn($this->verified());
+        $this->sendWebhook()->assertOk();
+        $this->sendWebhook()->assertOk();
+        $this->assertNull($booking->fresh()->paid_at);
+        $this->assertSame('pending', $booking->fresh()->status);
+        $this->assertDatabaseHas('payment_attempts', ['reference' => self::REFERENCE, 'status' => 'needs_review']);
+        $this->assertSame(0, AccommodationLedger::where('booking_id', $booking->id)->count());
+        $this->assertDatabaseCount('payment_reconciliation_cases', 1);
+    }
+
     public function test_wrong_currency_never_confirms_booking(): void
     {
         $this->assertInvalidVerification(['currency' => 'USD']);

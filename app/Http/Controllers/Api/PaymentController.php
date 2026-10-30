@@ -87,6 +87,20 @@ class PaymentController extends Controller
         }
 
         // Generate distinct reference
+        if ($record instanceof Booking) {
+            DB::transaction(function () use ($record) {
+                $room = \App\Models\Room::whereKey($record->room_id)->lockForUpdate()->firstOrFail();
+                $locked = Booking::whereKey($record->id)->lockForUpdate()->firstOrFail();
+                if (!$room->is_available || $room->status === 'maintenance' || $locked->paid_at
+                    || $locked->status !== 'pending'
+                    || ($locked->hold_expires_at && $locked->hold_expires_at->lte(now()))
+                    || \App\Services\RoomAvailability::blocking($locked->check_in, $locked->check_out, $locked->id)->where('room_id', $room->id)->exists()) {
+                    abort(409, 'This checkout is no longer available. Please check suite availability again.');
+                }
+                if (!$locked->hold_expires_at) $locked->update(['hold_expires_at' => now()->addMinutes(15)]);
+            }, 3);
+        }
+
         $prefix = strtoupper(substr($orderType, 0, 4));
         $reference = "INS-FLW-{$prefix}-{$record->id}-" . Str::uuid();
 
@@ -122,8 +136,8 @@ class PaymentController extends Controller
             'amount'              => $amount,
             'product_name'        => $productName,
             'product_description' => $productDesc,
-            'customer_name'       => $user->name,
-            'user_phone'          => $user->phone ?? '+2348000000000',
+            'customer_name'       => $record instanceof Booking ? ($record->booking_contact['name'] ?? $user->name) : $user->name,
+            'user_phone'          => $record instanceof Booking ? ($record->booking_contact['phone'] ?? $user->phone ?? '+2348000000000') : ($user->phone ?? '+2348000000000'),
             'user_email'          => $user->email,
             'redirect_url'        => $redirectBase . (str_contains($redirectBase, '?') ? '&' : '?') . http_build_query([
                 'reference' => $reference, 'order_type' => $orderType, 'order_id' => $orderId,
@@ -331,12 +345,12 @@ class PaymentController extends Controller
             }
 
             if ($record instanceof Booking) {
-                $conflict = Booking::where('room_id', $record->room_id)
-                    ->whereKeyNot($record->getKey())
-                    ->whereIn('status', ['confirmed', 'paid', 'completed'])
-                    ->where('check_in', '<', $record->check_out)
-                    ->where('check_out', '>', $record->check_in)
-                    ->exists();
+                if ($record->hold_expires_at && $record->hold_expires_at->lte(now())) {
+                    $this->flagPaymentForReview($attempt, $externalId, 'reservation_hold_expired');
+                    return null;
+                }
+                $conflict = \App\Services\RoomAvailability::blocking($record->check_in, $record->check_out, $record->id)
+                    ->where('room_id', $record->room_id)->exists();
 
                 if ($conflict) {
                     $this->flagPaymentForReview($attempt, $externalId, 'room_date_conflict');
