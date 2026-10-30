@@ -176,7 +176,7 @@ class RoomResource extends Resource
                                 ->required()
                                 ->numeric()
                                 ->minValue(0)
-                                ->step(500)
+                                ->step(0.01)
                                 ->prefix('₦')
                                 ->placeholder('150000')
                                 ->helperText('Standard rack rate per night in Nigerian Naira.'),
