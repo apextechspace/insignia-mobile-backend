@@ -55,7 +55,7 @@ class FlutterwaveService
             'customizations' => [
                 'title'       => 'Insignia Court Luxury Living',
                 'description' => substr($data['product_description'] ?? 'Hospitality Services', 0, 100),
-                'logo'        => 'https://insigniacourt.com/logo.png',
+                'logo'        => 'https://insigniacourts.com/assets/logo-trimmed.png',
             ],
         ];
 
