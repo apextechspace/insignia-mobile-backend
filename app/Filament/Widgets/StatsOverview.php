@@ -15,7 +15,7 @@ class StatsOverview extends BaseWidget
     {
         $pendingConcierge = ServiceBooking::where('status', 'pending')->count();
         $pendingOrders = Order::where('status', 'pending')->count();
-        
+
         $thirtyDaysAgo = now()->subDays(30);
         // Revenue is money verified as collected, not bookings merely created or confirmed.
         $bookingRevenue = Booking::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_price');
@@ -24,7 +24,7 @@ class StatsOverview extends BaseWidget
         $diningRevenue = \App\Models\FoodOrder::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_amount');
         $totalRevenue = $bookingRevenue + $serviceRevenue + $shopRevenue + $diningRevenue;
 
-        $pendingRoomBookings = Booking::where('status', 'pending')->count();
+        $pendingRoomBookings = Booking::actionablePending()->count();
         $futureConfirmedBookings = Booking::whereNotNull('paid_at')
             ->whereIn('status', ['confirmed', 'paid'])
             ->whereDate('check_in', '>=', today())->count();
@@ -47,8 +47,8 @@ class StatsOverview extends BaseWidget
                 ->description($occupiedRooms > 0 ? 'Suites currently occupied' : 'All suites vacant / ready')
                 ->descriptionIcon('heroicon-m-home-modern', IconPosition::Before)
                 ->color($occupiedRooms >= 3 ? 'success' : 'info'),
-            Stat::make('Total Revenue (30d)', '₦' . number_format($totalRevenue))
-                ->description('Room: ₦' . number_format($bookingRevenue) . ' · Ancillary: ₦' . number_format($serviceRevenue + $shopRevenue + $diningRevenue))
+            Stat::make('Total Revenue (30d)', '₦'.number_format($totalRevenue))
+                ->description('Room: ₦'.number_format($bookingRevenue).' · Ancillary: ₦'.number_format($serviceRevenue + $shopRevenue + $diningRevenue))
                 ->descriptionIcon('heroicon-m-banknotes', IconPosition::Before)
                 ->color('success'),
             Stat::make('Bank Receipts to Verify', $receiptsWaitingForReview)

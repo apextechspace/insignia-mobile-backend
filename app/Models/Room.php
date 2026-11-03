@@ -11,8 +11,15 @@ class Room extends Model
     protected static function booted(): void
     {
         static::updating(function (Room $room): void {
-            if (!$room->isDirty('status') || $room->status !== 'available'
-                || $room->getOriginal('status') !== 'cleaning') {
+            if (! $room->isDirty('status') || $room->status !== 'available') {
+                return;
+            }
+
+            if (\App\Models\Booking::where('room_id', $room->id)
+                ->whereNotNull('checked_in_at')->whereNull('checked_out_at')->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['room' => 'An active checked-in stay prevents releasing this room.']);
+            }
+            if (! in_array($room->getOriginal('status'), ['cleaning', 'maintenance'], true)) {
                 return;
             }
 
@@ -22,18 +29,16 @@ class Room extends Model
                 ->where('task_type', 'room_turnaround')
                 ->latest('id')->first();
 
-            if (!$verified || $verified->status !== 'verified') {
+            if ($room->getOriginal('status') === 'maintenance' && ! $verified) {
+                return;
+            }
+
+            if (! $verified || $verified->status !== 'verified') {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'room' => 'A supervisor must verify the latest turnaround checklist before this room can be marked ready.',
                 ]);
             }
 
-            if (\App\Models\Booking::where('room_id', $room->id)
-                ->whereNotNull('checked_in_at')->whereNull('checked_out_at')->exists()) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'room' => 'An active checked-in stay prevents releasing this room.',
-                ]);
-            }
         });
     }
 
@@ -62,7 +67,7 @@ class Room extends Model
 
     public function getImagesAttribute($value)
     {
-        $images = !is_null($value) && !is_array($value) ? json_decode($value, true) : $value;
+        $images = ! is_null($value) && ! is_array($value) ? json_decode($value, true) : $value;
         $images = $images ?: [];
 
         $cleanRelative = function ($image) {
@@ -74,12 +79,13 @@ class Room extends Model
                     return substr($image, 8);
                 }
             }
+
             return $image;
         };
 
         // If inside Filament admin/operations panel, Livewire, or console (tinker/commands/seeders), keep relative paths
         if (
-            (app()->runningInConsole() && !app()->runningUnitTests()) ||
+            (app()->runningInConsole() && ! app()->runningUnitTests()) ||
             (function_exists('filament') && filament()->isServing()) ||
             (request() && request()->is('admin*', 'operations*', 'livewire*'))
         ) {
@@ -88,24 +94,30 @@ class Room extends Model
 
         return array_values(array_filter(array_map(function ($image) use ($cleanRelative) {
             $image = $cleanRelative($image);
-            if (is_string($image) && str_starts_with($image, 'http')) return $image;
-            return asset('storage/' . $image);
+            if (is_string($image) && str_starts_with($image, 'http')) {
+                return $image;
+            }
+
+            return asset('storage/'.$image);
         }, $images)));
     }
 
     public function setImagesAttribute($value): void
     {
-        $images = !is_null($value) && !is_array($value) ? json_decode($value, true) : $value;
+        $images = ! is_null($value) && ! is_array($value) ? json_decode($value, true) : $value;
         $images = $images ?: [];
 
         $cleaned = array_values(array_filter(array_map(function ($image) {
-            if (!is_string($image)) return $image;
+            if (! is_string($image)) {
+                return $image;
+            }
             if (str_contains($image, '/storage/')) {
                 return explode('/storage/', $image)[1];
             }
             if (str_starts_with($image, 'storage/')) {
                 return substr($image, 8);
             }
+
             return $image;
         }, $images)));
 
@@ -114,7 +126,9 @@ class Room extends Model
 
     public function getVideoUrlAttribute($value)
     {
-        if (!$value) return null;
+        if (! $value) {
+            return null;
+        }
 
         $cleanRelative = function ($video) {
             if (is_string($video)) {
@@ -125,11 +139,12 @@ class Room extends Model
                     return substr($video, 8);
                 }
             }
+
             return $video;
         };
 
         if (
-            (app()->runningInConsole() && !app()->runningUnitTests()) ||
+            (app()->runningInConsole() && ! app()->runningUnitTests()) ||
             (function_exists('filament') && filament()->isServing()) ||
             (request() && request()->is('admin*', 'operations*', 'livewire*'))
         ) {
@@ -137,14 +152,18 @@ class Room extends Model
         }
 
         $value = $cleanRelative($value);
-        if (str_starts_with($value, 'http')) return $value;
-        return asset('storage/' . $value);
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+
+        return asset('storage/'.$value);
     }
 
     public function setVideoUrlAttribute($value): void
     {
-        if (!$value) {
+        if (! $value) {
             $this->attributes['video_url'] = null;
+
             return;
         }
 
@@ -162,6 +181,7 @@ class Room extends Model
     public function getImageUrlAttribute()
     {
         $images = $this->images;
+
         return count($images) > 0 ? $images[0] : 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1000&q=80';
     }
 

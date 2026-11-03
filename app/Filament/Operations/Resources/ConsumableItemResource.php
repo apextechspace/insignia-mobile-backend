@@ -4,15 +4,12 @@ namespace App\Filament\Operations\Resources;
 
 use App\Filament\Operations\Resources\ConsumableItemResource\Pages;
 use App\Models\ConsumableItem;
-use App\Models\StockMovement;
-use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
-use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 
 class ConsumableItemResource extends Resource
@@ -20,8 +17,11 @@ class ConsumableItemResource extends Resource
     protected static ?string $model = ConsumableItem::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
+
     protected static ?string $navigationLabel = 'Inventory';
+
     protected static ?string $navigationGroup = 'Operations';
+
     protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
@@ -37,12 +37,12 @@ class ConsumableItemResource extends Resource
                         Forms\Components\Select::make('category')
                             ->label('Category')
                             ->options([
-                                'toiletries'       => '🧴 Toiletries',
-                                'linen'            => '🛏 Linen & Bedding',
+                                'toiletries' => '🧴 Toiletries',
+                                'linen' => '🛏 Linen & Bedding',
                                 'cleaning_supplies' => '🧹 Cleaning Supplies',
-                                'kitchen'          => '🍳 Kitchen',
-                                'minibar'          => '🧃 Minibar',
-                                'stationery'       => '📝 Stationery',
+                                'kitchen' => '🍳 Kitchen',
+                                'minibar' => '🧃 Minibar',
+                                'stationery' => '📝 Stationery',
                             ])
                             ->required()
                             ->native(false),
@@ -54,7 +54,7 @@ class ConsumableItemResource extends Resource
                             ->label('Current Stock')
                             ->numeric()
                             ->default(0)
-                            ->disabled(fn(string $operation): bool => $operation === 'edit'),
+                            ->disabled(fn (string $operation): bool => $operation === 'edit'),
                         Forms\Components\TextInput::make('minimum_alert_level')
                             ->label('Low Stock Alert Threshold')
                             ->numeric()
@@ -63,7 +63,7 @@ class ConsumableItemResource extends Resource
                             ->label('Unit Cost (₦)')
                             ->numeric()
                             ->prefix('₦')
-                            ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                            ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
                     ])->columns(2),
             ]);
     }
@@ -78,22 +78,20 @@ class ConsumableItemResource extends Resource
                     ->weight('medium'),
                 Tables\Columns\BadgeColumn::make('category')
                     ->label('Category')
-                    ->formatStateUsing(fn(string $state): string => ucwords(str_replace('_', ' ', $state))),
+                    ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
                 Tables\Columns\TextColumn::make('unit')
                     ->label('Unit'),
                 Tables\Columns\TextColumn::make('current_stock')
                     ->label('Stock')
                     ->sortable()
-                    ->color(fn(ConsumableItem $record): string =>
-                        $record->current_stock <= $record->minimum_alert_level ? 'danger' : 'success'
+                    ->color(fn (ConsumableItem $record): string => $record->current_stock <= $record->minimum_alert_level ? 'danger' : 'success'
                     )
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('minimum_alert_level')
                     ->label('Min. Level'),
                 Tables\Columns\IconColumn::make('low_stock')
                     ->label('⚠️ Low?')
-                    ->getStateUsing(fn(ConsumableItem $record): bool =>
-                        $record->current_stock <= $record->minimum_alert_level
+                    ->getStateUsing(fn (ConsumableItem $record): bool => $record->current_stock <= $record->minimum_alert_level
                     )
                     ->boolean()
                     ->trueColor('danger')
@@ -101,7 +99,7 @@ class ConsumableItemResource extends Resource
                 Tables\Columns\TextColumn::make('unit_cost')
                     ->label('Unit Cost')
                     ->money('NGN')
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
             ])
             ->defaultSort('name')
             ->actions([
@@ -112,72 +110,72 @@ class ConsumableItemResource extends Resource
                     ->form([
                         Forms\Components\Select::make('room_id')
                             ->label('Issue to Room')
-                            ->relationship('stockMovements.room', 'name')
-                            ->options(fn() => \App\Models\Room::pluck('name', 'id'))
+                            ->options(fn () => \App\Models\Room::pluck('name', 'id'))
                             ->required()
                             ->native(false),
                         Forms\Components\TextInput::make('quantity')
                             ->label('Quantity to Issue')
                             ->numeric()
+                            ->integer()
                             ->minValue(1)
                             ->required(),
                         Forms\Components\Textarea::make('notes')
                             ->label('Notes')
                             ->rows(2),
                     ])
-                    ->action(function (ConsumableItem $record, array $data): void {
-                        StockMovement::create([
-                            'consumable_item_id' => $record->id,
-                            'movement_type'      => 'room_issuance',
-                            'quantity'           => -abs($data['quantity']),
-                            'room_id'            => $data['room_id'],
-                            'handled_by'         => Auth::id(),
-                            'notes'              => $data['notes'] ?? null,
-                        ]);
-                        $record->decrement('current_stock', abs($data['quantity']));
+                    ->action(function (ConsumableItem $record, array $data, $livewire): void {
+                        self::withStockValidation(fn () => app(\App\Services\ConsumableStockService::class)->issueToRoom($record, Auth::user(), $data), $livewire);
                     }),
                 Action::make('restock')
                     ->label('Restock')
                     ->icon('heroicon-o-plus-circle')
                     ->color('success')
-                    ->visible(fn(): bool => !Auth::user()?->isStaff())
+                    ->visible(fn (): bool => ! Auth::user()?->isStaff())
                     ->form([
                         Forms\Components\TextInput::make('quantity')
                             ->label('Quantity Received')
                             ->numeric()
+                            ->integer()
                             ->minValue(1)
                             ->required(),
                         Forms\Components\Textarea::make('notes')
                             ->label('Notes')
                             ->rows(2),
                     ])
-                    ->action(function (ConsumableItem $record, array $data): void {
-                        StockMovement::create([
-                            'consumable_item_id' => $record->id,
-                            'movement_type'      => 'purchase_restock',
-                            'quantity'           => abs($data['quantity']),
-                            'handled_by'         => Auth::id(),
-                            'notes'              => $data['notes'] ?? null,
-                        ]);
-                        $record->increment('current_stock', abs($data['quantity']));
+                    ->action(function (ConsumableItem $record, array $data, $livewire): void {
+                        self::withStockValidation(fn () => app(\App\Services\ConsumableStockService::class)->restock($record, Auth::user(), $data), $livewire);
                     }),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn(): bool => !Auth::user()?->isStaff()),
+                    ->visible(fn (): bool => ! Auth::user()?->isStaff()),
             ]);
+    }
+
+    private static function withStockValidation(callable $action, $livewire): void
+    {
+        try {
+            $action();
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $prefix = $livewire->getMountedTableActionForm()->getStatePath();
+            $errors = [];
+            foreach ($exception->errors() as $field => $messages) {
+                $errors[$prefix.'.'.$field] = $messages;
+            }
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
     }
 
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListConsumableItems::route('/'),
+            'index' => Pages\ListConsumableItems::route('/'),
             'create' => Pages\CreateConsumableItem::route('/create'),
-            'edit'   => Pages\EditConsumableItem::route('/{record}/edit'),
+            'edit' => Pages\EditConsumableItem::route('/{record}/edit'),
         ];
     }
 
     public static function canCreate(): bool
     {
-        return !Auth::user()?->isStaff();
+        return ! Auth::user()?->isStaff();
     }
 
     public static function canViewAny(): bool

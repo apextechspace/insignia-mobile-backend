@@ -4,14 +4,12 @@ namespace App\Filament\Operations\Resources;
 
 use App\Filament\Operations\Resources\RoomStatusResource\Pages;
 use App\Models\Room;
-use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 
 class RoomStatusResource extends Resource
@@ -19,9 +17,13 @@ class RoomStatusResource extends Resource
     protected static ?string $model = Room::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-home';
+
     protected static ?string $navigationLabel = 'Room Status';
+
     protected static ?string $modelLabel = 'Room';
+
     protected static ?string $navigationGroup = 'Operations';
+
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -34,17 +36,17 @@ class RoomStatusResource extends Resource
                             ->label('Room Name')
                             ->disabled(),
                         Forms\Components\Select::make('status')
-                    ->label('Physical Room Status')
-                    ->options([
-                        'available' => 'Available / Ready',
-                        'cleaning' => 'Cleaning In Progress',
-                        'maintenance' => 'Under Maintenance',
-                        'reserved' => 'Reserved',
-                    ])
-                    ->helperText('Occupied is managed by Check In/Check Out. Do not mark a checked-in suite as ready.')
-                    ->required()
-                    ->native(false),
-                Forms\Components\Textarea::make('housekeeping_notes')
+                            ->label('Physical Room Status')
+                            ->options([
+                                'available' => 'Available / Ready',
+                                'cleaning' => 'Cleaning In Progress',
+                                'maintenance' => 'Under Maintenance',
+                                'reserved' => 'Reserved',
+                            ])
+                            ->helperText('Occupied is managed by Check In/Check Out. Do not mark a checked-in suite as ready.')
+                            ->required()
+                            ->native(false),
+                        Forms\Components\Textarea::make('housekeeping_notes')
                             ->label('Housekeeping Notes')
                             ->rows(3)
                             ->placeholder('Any notes for the next shift...')
@@ -67,18 +69,18 @@ class RoomStatusResource extends Resource
                     ->label('Status')
                     ->colors([
                         'success' => 'available',
-                        'danger'  => 'occupied',
+                        'danger' => 'occupied',
                         'warning' => 'cleaning',
-                        'gray'    => 'maintenance',
-                        'info'    => 'reserved',
+                        'gray' => 'maintenance',
+                        'info' => 'reserved',
                     ])
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'available'   => '✅ Ready',
-                        'occupied'    => '🔴 Occupied',
-                        'cleaning'    => '🧹 Cleaning',
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'available' => '✅ Ready',
+                        'occupied' => '🔴 Occupied',
+                        'cleaning' => '🧹 Cleaning',
                         'maintenance' => '🔧 Maintenance',
-                        'reserved'    => '📋 Reserved',
-                        default       => ucfirst($state),
+                        'reserved' => '📋 Reserved',
+                        default => ucfirst($state),
                     }),
                 Tables\Columns\TextColumn::make('activeBooking.check_in')
                     ->label('Check-in')
@@ -102,18 +104,22 @@ class RoomStatusResource extends Resource
                     ->label('Mark Ready')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn(Room $record): bool => in_array($record->status, ['cleaning', 'maintenance']))
+                    ->visible(fn (Room $record): bool => RoomReadinessResource::canViewAny() && in_array($record->status, ['cleaning', 'maintenance']))
                     ->requiresConfirmation()
                     ->modalHeading('Mark Room as Ready?')
-                    ->modalDescription(fn(Room $record): string => "Confirm that {$record->name} has been cleaned and is ready for the next guest.")
+                    ->modalDescription(fn (Room $record): string => "Confirm that {$record->name} has been cleaned and is ready for the next guest.")
                     ->action(function (Room $record): void {
-                        $record->update(['status' => 'available']);
+                        try {
+                            app(\App\Services\RoomTurnoverService::class)->markReady($record, Auth::user());
+                        } catch (\Illuminate\Validation\ValidationException $exception) {
+                            \Filament\Notifications\Notification::make()->danger()->title('Room is not ready for release')->body(collect($exception->errors())->flatten()->first())->send();
+                        }
                     }),
                 Action::make('mark_cleaning')
                     ->label('Start Cleaning')
                     ->icon('heroicon-o-sparkles')
                     ->color('warning')
-                    ->visible(fn(Room $record): bool => $record->status === 'available')
+                    ->visible(fn (Room $record): bool => $record->status === 'available')
                     ->action(function (Room $record): void {
                         $record->update(['status' => 'cleaning']);
                     }),
@@ -121,13 +127,13 @@ class RoomStatusResource extends Resource
                     ->label('Flag Maintenance')
                     ->icon('heroicon-o-wrench-screwdriver')
                     ->color('gray')
-                    ->visible(fn(Room $record): bool => $record->status !== 'maintenance')
+                    ->visible(fn (Room $record): bool => $record->status !== 'maintenance')
                     ->requiresConfirmation()
                     ->action(function (Room $record): void {
                         $record->update(['status' => 'maintenance']);
                     }),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner()),
             ])
             ->bulkActions([]);
     }
@@ -136,7 +142,7 @@ class RoomStatusResource extends Resource
     {
         return [
             'index' => Pages\ListRoomStatuses::route('/'),
-            'edit'  => Pages\EditRoomStatus::route('/{record}/edit'),
+            'edit' => Pages\EditRoomStatus::route('/{record}/edit'),
         ];
     }
 

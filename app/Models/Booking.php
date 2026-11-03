@@ -6,6 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
+    public function scopeActionablePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'pending')->where(fn ($q) => $q->whereNull('hold_expires_at')->orWhere('hold_expires_at', '>', now()));
+    }
+
     use \App\Models\Concerns\ProtectsPaidDetails;
 
     protected array $paidDetailFields = ['user_id', 'room_id', 'check_in', 'check_out', 'total_price'];
@@ -59,7 +64,7 @@ class Booking extends Model
 
     public function getReceiptUrlAttribute($value)
     {
-        return $value ? asset('storage/' . $value) : null;
+        return $value ? asset('storage/'.$value) : null;
     }
 
     public function room()

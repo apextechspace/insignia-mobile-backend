@@ -19,7 +19,7 @@ class RoomTurnoverService
     {
         return StaffTask::create([
             'room_id' => $room->id,
-            'task_title' => 'Guest checkout turnaround – ' . $room->name,
+            'task_title' => 'Guest checkout turnaround – '.$room->name,
             'task_type' => 'room_turnaround',
             'priority' => 'high',
             'status' => 'pending',
@@ -34,7 +34,7 @@ class RoomTurnoverService
 
     public function markReady(Room $room, User $reviewer): void
     {
-        if (!in_array($reviewer->role, [
+        if (! in_array($reviewer->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN,
             User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS,
         ], true)) {
@@ -44,8 +44,8 @@ class RoomTurnoverService
         DB::transaction(function () use ($room) {
             $lockedRoom = Room::whereKey($room->id)->lockForUpdate()->firstOrFail();
 
-            if ($lockedRoom->status !== 'cleaning') {
-                throw ValidationException::withMessages(['room' => 'Only cleaned suites may be marked ready.']);
+            if (! in_array($lockedRoom->status, ['cleaning', 'maintenance'], true)) {
+                throw ValidationException::withMessages(['room' => 'Only suites awaiting cleaning or maintenance review may be marked ready.']);
             }
 
             if (Booking::where('room_id', $room->id)
@@ -57,12 +57,20 @@ class RoomTurnoverService
                 ->where('task_type', 'room_turnaround')
                 ->latest('id')->lockForUpdate()->first();
 
-            if (!$task || $task->status !== 'completed' || !$task->completed_at) {
+            // Maintenance without an outstanding checkout checklist still needs
+            // supervisor review and must never displace a checked-in guest.
+            if ($lockedRoom->status === 'maintenance' && (! $task || $task->status === 'verified')) {
+                $lockedRoom->update(['status' => 'available']);
+
+                return;
+            }
+
+            if (! $task || $task->status !== 'completed' || ! $task->completed_at) {
                 throw ValidationException::withMessages(['room' => 'Finish the latest checkout cleaning task before marking this suite ready.']);
             }
 
             $items = $task->checklist_items;
-            if (!is_array($items) || count($items) === 0) {
+            if (! is_array($items) || count($items) === 0) {
                 throw ValidationException::withMessages(['room' => 'A completed inspection checklist is required.']);
             }
 
