@@ -25,7 +25,7 @@ class StoreBookingRequest extends FormRequest
             'room_id' => 'required|exists:rooms,id',
             'check_in' => 'required|date_format:Y-m-d|after_or_equal:today',
             'check_out' => 'required|date_format:Y-m-d|after:check_in',
-            'guests' => 'nullable|integer|min:1|max:4',
+            'guests' => 'nullable|integer|min:1|max:2',
             'guest_name' => 'nullable|string|max:255',
             'guest_phone' => 'nullable|string|min:7|max:40',
             'special_requests' => 'nullable|string|max:2000',

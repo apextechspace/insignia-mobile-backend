@@ -13,7 +13,7 @@ class RoomController extends Controller
         $dates = $request->validate([
             'check_in' => 'required_with:check_out|date_format:Y-m-d|after_or_equal:today',
             'check_out' => 'required_with:check_in|date_format:Y-m-d|after:check_in',
-            'guests' => 'nullable|integer|min:1|max:4',
+            'guests' => 'nullable|integer|min:1|max:2',
         ]);
         $rooms = Room::where('is_available', true)->where('status', '!=', 'maintenance');
         if (!empty($dates['check_in'])) {

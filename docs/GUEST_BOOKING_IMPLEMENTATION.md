@@ -4,7 +4,7 @@ Implemented on `feature/guest-booking` in the backend and Expo repositories. Rev
 
 ## Customer journey
 
-Web visitors land at `/book-online` from the Stay root. They choose dates and 1–4 guests, select an available suite, and provide the lead guest's name, email and phone. Special requests are optional. Laravel checks availability and calculates the price. The browser must review any rate change before payment.
+Web visitors land at `/book-online` from the Stay root. They choose dates and 1–2 guests per room, select an available suite, and provide the lead guest's name, email and phone. Special requests are optional. Laravel checks availability and calculates the price. The browser must review any rate change before payment.
 
 A visitor verifies their email using a six-digit code before creating the reservation. There is no password or separate registration form. Verification creates or reuses a customer identity in the existing users table. Only possession of the email code/link authorizes access; typing an existing customer's email does not expose or attach their bookings. Existing customer names/phones are not overwritten by sign-in requests. Per-booking lead guest details are saved separately.
 

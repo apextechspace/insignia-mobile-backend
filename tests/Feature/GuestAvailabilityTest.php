@@ -41,17 +41,17 @@ class GuestAvailabilityTest extends TestCase
         $this->actingAs(User::factory()->create())->postJson('/api/bookings', $dates)->assertCreated();
         $next = ['check_in' => $dates['check_out'], 'check_out' => today()->addDays(9)->toDateString()];
         $this->getJson('/api/rooms?'.http_build_query($next))->assertOk()->assertJsonCount(1);
-        $this->getJson('/api/rooms?'.http_build_query($next + ['guests' => 9]))->assertUnprocessable();
+        $this->getJson('/api/rooms?'.http_build_query($next + ['guests' => 3]))->assertUnprocessable();
         $this->getJson('/api/rooms?check_in='.$dates['check_in'])->assertUnprocessable();
     }
 
     public function test_booking_contact_and_requests_persist_without_being_public(): void
     {
         $room = $this->room();
-        $this->actingAs(User::factory()->create())->postJson('/api/bookings', $this->dates($room) + ['guest_name' => 'Arriving Guest', 'guest_phone' => '08033333333', 'guests' => 3, 'special_requests' => 'Late arrival'])->assertCreated()->assertJsonMissingPath('booking_contact');
+        $this->actingAs(User::factory()->create())->postJson('/api/bookings', $this->dates($room) + ['guest_name' => 'Arriving Guest', 'guest_phone' => '08033333333', 'guests' => 2, 'special_requests' => 'Late arrival'])->assertCreated()->assertJsonMissingPath('booking_contact');
         $booking = Booking::first();
         $this->assertSame('Arriving Guest', $booking->booking_contact['name']);
-        $this->assertSame(3, $booking->guests);
+        $this->assertSame(2, $booking->guests);
         $this->assertSame('Late arrival', $booking->special_requests);
     }
 
@@ -63,6 +63,17 @@ class GuestAvailabilityTest extends TestCase
         $this->travel(16)->minutes();
         $this->postJson('/api/payments/flutterwave/initialize', ['order_type' => 'booking', 'order_id' => $id])->assertConflict();
         $this->assertDatabaseCount('payment_attempts', 0);
+    }
+
+    public function test_new_booking_rejects_three_guests_but_accepts_two(): void
+    {
+        $room = $this->room();
+        $this->actingAs(User::factory()->create());
+        $this->postJson('/api/bookings', $this->dates($room) + ['guests' => 3])
+            ->assertUnprocessable()->assertJsonValidationErrors('guests');
+        $this->assertDatabaseCount('bookings', 0);
+        $this->postJson('/api/bookings', $this->dates($room) + ['guests' => 2])
+            ->assertCreated()->assertJsonPath('guests', 2);
     }
 
     public function test_checkout_release_is_owner_only_and_does_not_cancel_paid_stays(): void
