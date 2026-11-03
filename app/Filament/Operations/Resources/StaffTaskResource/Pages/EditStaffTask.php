@@ -20,6 +20,15 @@ class EditStaffTask extends EditRecord
 
             // Ignore forged Livewire fields; ordinary staff may submit only
             // checklist progress and notes for their own assigned tasks.
+            if (array_key_exists('checklist_items', $data)) {
+                $original = array_values($this->record->checklist_items ?? []);
+                $submitted = array_values($data['checklist_items'] ?? []);
+                if (count($original) !== count($submitted)
+                    || array_column($original, 'item') !== array_column($submitted, 'item')) {
+                    throw ValidationException::withMessages(['data.checklist_items' => 'Staff can tick assigned checklist items, but cannot replace or remove them.']);
+                }
+            }
+
             return array_intersect_key($data, array_flip(['checklist_items', 'notes']));
         }
 
