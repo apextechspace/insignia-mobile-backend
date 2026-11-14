@@ -137,7 +137,7 @@ class PaymentController extends Controller
             'product_name'        => $productName,
             'product_description' => $productDesc,
             'customer_name'       => $record instanceof Booking ? ($record->booking_contact['name'] ?? $user->name) : $user->name,
-            'user_phone'          => $record instanceof Booking ? ($record->booking_contact['phone'] ?? $user->phone ?? '+2348000000000') : ($user->phone ?? '+2348000000000'),
+            'user_phone'          => $record instanceof Booking ? ($record->booking_contact['phone'] ?? $user->phone) : $user->phone,
             'user_email'          => $user->email,
             'redirect_url'        => $redirectBase . (str_contains($redirectBase, '?') ? '&' : '?') . http_build_query([
                 'reference' => $reference, 'order_type' => $orderType, 'order_id' => $orderId,

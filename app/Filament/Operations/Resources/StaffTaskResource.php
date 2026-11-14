@@ -23,6 +23,11 @@ class StaffTaskResource extends Resource
 
     protected static ?string $navigationLabel = 'Tasks';
 
+    public static function getNavigationLabel(): string
+    {
+        return Auth::user()?->isStaff() ? 'My Tasks' : parent::getNavigationLabel();
+    }
+
     protected static ?string $navigationGroup = 'Operations';
 
     protected static ?int $navigationSort = 4;

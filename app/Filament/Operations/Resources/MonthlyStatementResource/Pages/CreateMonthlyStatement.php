@@ -14,6 +14,9 @@ class CreateMonthlyStatement extends CreateRecord
     {
         $data['submitted_by'] = Auth::id();
         $data['statement_code'] = 'STM-' . $data['year'] . '-' . str_pad((string) $data['month'], 2, '0', STR_PAD_LEFT);
+        if (\App\Models\MonthlyStatement::where('statement_code', $data['statement_code'])->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['data.month' => 'A statement already exists for this period.']);
+        }
         return $data;
     }
 }

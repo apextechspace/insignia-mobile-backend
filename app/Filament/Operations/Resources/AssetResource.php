@@ -111,8 +111,7 @@ class AssetResource extends Resource
                 Tables\Columns\ImageColumn::make('photo_url')
                     ->label('')
                     ->circular()
-                    ->disk('public')
-                    ->defaultImageUrl(fn () => 'https://ui-avatars.com/api/?background=334155&color=fff&name=Asset'),
+                    ->disk('public'),
                 Tables\Columns\TextColumn::make('asset_code')
                     ->label('Tag Code')
                     ->fontFamily('mono')
@@ -211,6 +210,13 @@ class AssetResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ]);
+    }
+
+    public static function canViewAny(): bool
+    {
+        $user = Auth::user();
+
+        return $user && ! $user->isStaff() && parent::canViewAny();
     }
 
     public static function getPages(): array

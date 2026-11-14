@@ -50,7 +50,7 @@ class MonthlyStatementPolicy
         // MCL can only edit draft statements they own
         return $user->isDeliveryPartner()
             && $statement->submitted_by === $user->id
-            && $statement->status === 'draft';
+            && in_array($statement->status, ['draft', 'queried'], true);
     }
 
     public function delete(User $user, MonthlyStatement $statement): bool

@@ -33,9 +33,9 @@ class StayOperationsService
                 || $stay->checked_in_at || $stay->checked_out_at) {
                 throw ValidationException::withMessages(['booking' => 'A confirmed paid reservation is required for check-in.']);
             }
-            if (today()->toDateString() < $stay->check_in || today()->toDateString() >= $stay->check_out) {
+            if (today(config('property.timezone'))->toDateString() < $stay->check_in || today(config('property.timezone'))->toDateString() >= $stay->check_out) {
                 throw ValidationException::withMessages([
-                    'booking' => "Check-in is available from {$stay->check_in} until before {$stay->check_out}. Today is " . today()->toDateString() . '.',
+                    'booking' => "Check-in is available from {$stay->check_in} until before {$stay->check_out}. Today is " . today(config('property.timezone'))->toDateString() . '.',
                 ]);
             }
             if (!in_array($room->status, ['available', 'reserved'], true)) {

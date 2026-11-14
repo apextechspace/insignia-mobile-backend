@@ -1,5 +1,77 @@
 <x-filament-widgets::widget>
+    @if (auth()->user()?->isStaff())
+        <div class="space-y-6">
+            <x-filament::section>
+                <x-slot name="heading">My Tasks</x-slot>
+                <ul class="space-y-3">
+                    @forelse ($staffTasks as $task)
+                        <li>
+                            <a class="font-semibold text-primary-600" href="{{ \App\Filament\Operations\Resources\StaffTaskResource::getUrl('edit', ['record' => $task], panel: 'operations') }}">{{ $task->task_title }}</a>
+                            <p>{{ $task->location_name }} · {{ ucfirst($task->priority) }} priority</p>
+                            @if ($task->room)
+                                <p>{{ match ($task->room->status) {
+                                    'occupied' => 'Occupied. Check with front desk before entering.',
+                                    'maintenance' => 'Under maintenance. Check with your supervisor before entering.',
+                                    'cleaning' => 'Cleaning in progress.',
+                                    default => 'Confirm access with front desk before entering.',
+                                } }}</p>
+                            @endif
+                        </li>
+                    @empty
+                        <li>No open tasks assigned to you.</li>
+                    @endforelse
+                </ul>
+                <div class="mt-4">
+                    <x-filament::button tag="a" :href="\App\Filament\Operations\Resources\StaffTaskResource::getUrl(panel: 'operations')">
+                        View Tasks or Report an Issue
+                    </x-filament::button>
+                </div>
+            </x-filament::section>
+            <x-filament::section>
+                <x-slot name="heading">My Shift</x-slot>
+                <ul class="space-y-2">
+                    @forelse ($staffShifts as $shift)
+                        <li>{{ $shift->shift_date->format('D, j M') }} · {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }} · {{ ucfirst(str_replace('_', ' ', $shift->status)) }}</li>
+                    @empty
+                        <li>No upcoming shifts scheduled.</li>
+                    @endforelse
+                </ul>
+                <div class="mt-4">
+                    <x-filament::button tag="a" :href="\App\Filament\Operations\Resources\StaffShiftResource::getUrl(panel: 'operations')">
+                        Open My Roster
+                    </x-filament::button>
+                </div>
+            </x-filament::section>
+        </div>
+    @elseif (auth()->user()?->isGuestRelations())
+        @include('filament.operations.widgets.front-desk-dashboard')
+    @else
     <div class="space-y-6">
+        @if (auth()->user()?->isDeliveryPartner())
+            <x-filament::section>
+                <x-slot name="heading">Manager Review Queue</x-slot>
+                <p><a href="{{ \App\Filament\Operations\Resources\PettyCashResource::getUrl(panel: 'operations') }}">Operating Float: ₦{{ number_format($imprestBalance, 2) }}</a></p>
+                <p><a href="{{ \App\Filament\Operations\Resources\MonthlyStatementResource::getUrl(panel: 'operations') }}">Open Monthly Statements</a></p>
+                <p class="mt-4 font-semibold">Cleaning awaiting verification</p>
+                @forelse ($cleaningReviews as $task)
+                    <p><a href="{{ \App\Filament\Operations\Resources\StaffTaskResource::getUrl('edit', ['record' => $task], panel: 'operations') }}">{{ $task->location_name }} · {{ $task->task_title }}</a></p>
+                @empty
+                    <p>No completed cleaning to review.</p>
+                @endforelse
+                <p class="mt-4 font-semibold">Maintenance rooms with upcoming arrivals</p>
+                @forelse ($upcomingReservations->filter(fn ($stay) => $stay->room?->status === 'maintenance') as $stay)
+                    <p><a href="{{ \App\Filament\Operations\Resources\GuestStayResource::getUrl('view', ['record' => $stay], panel: 'operations') }}">{{ $stay->room->name }} · Arrival {{ $stay->check_in }}</a></p>
+                @empty
+                    <p>No upcoming arrivals shown for maintenance rooms.</p>
+                @endforelse
+                <p class="mt-4 font-semibold">Urgent incidents</p>
+                @forelse ($urgentIncidents as $issue)
+                    <p><a href="{{ \App\Filament\Operations\Resources\IncidentResource::getUrl('edit', ['record' => $issue], panel: 'operations') }}">{{ $issue->title }}</a></p>
+                @empty
+                    <p>No open high or critical incidents.</p>
+                @endforelse
+            </x-filament::section>
+        @endif
         {{-- ============================================================ --}}
         {{-- EXECUTIVE BANNER: RICH INSIGNIA PLUM LUXURY GRADIENT --}}
         {{-- ============================================================ --}}
@@ -29,17 +101,17 @@
                 <div class="flex items-center gap-3 bg-black/25 backdrop-blur-md px-4 py-3 rounded-xl border border-white/10">
                     <div class="text-right">
                         <p class="text-xs text-pink-200/70 font-medium uppercase tracking-wider">
-                            {{ now()->format('l, d M Y') }}
+                            {{ $propertyNow->format('l, d M Y') }}
                         </p>
                         <p class="text-lg font-bold text-white font-mono">
-                            {{ now()->format('h:i A') }} <span class="text-xs text-[#E5C07B]">WAT</span>
+                            {{ $propertyNow->format('h:i A T') }}
                         </p>
                     </div>
                     <div class="h-8 w-px bg-white/15"></div>
                     <div class="text-center px-1">
                         <p class="text-[10px] text-pink-200/70 font-semibold uppercase">Shift</p>
                         <p class="text-xs font-bold text-emerald-300">
-                            {{ now()->format('H') < 14 ? 'Morning' : (now()->format('H') < 21 ? 'Evening' : 'Night') }}
+                            {{ $propertyNow->format('H') < 14 ? 'Morning' : ($propertyNow->format('H') < 21 ? 'Evening' : 'Night') }}
                         </p>
                     </div>
                 </div>
@@ -357,4 +429,5 @@
             </div>
         </div>
     </div>
+    @endif
 </x-filament-widgets::widget>

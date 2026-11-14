@@ -80,10 +80,7 @@ class UserResource extends Resource
                         str_starts_with($record->avatar_url, 'http') => $record->avatar_url,
                         str_starts_with($record->avatar_url, '/storage/') => url($record->avatar_url),
                         default => url('/storage/' . $record->avatar_url),
-                    })
-                    ->defaultImageUrl(fn ($record) =>
-                        'https://ui-avatars.com/api/?background=4B1D3F&color=fff&name=' . urlencode($record->name ?? 'Guest') . '&size=100'
-                    ),
+                    }),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
                     ->sortable()
@@ -145,7 +142,7 @@ class UserResource extends Resource
                                     ->circular()
                                     ->height(120)
                                     ->state(fn ($record) => match(true) {
-                                        empty($record->avatar_url) => 'https://ui-avatars.com/api/?background=4B1D3F&color=fff&name=' . urlencode($record->name ?? 'Guest') . '&size=200',
+                                        empty($record->avatar_url) => null,
                                         str_starts_with($record->avatar_url, 'http') => $record->avatar_url,
                                         str_starts_with($record->avatar_url, '/storage/') => url($record->avatar_url),
                                         default => url('/storage/' . $record->avatar_url),

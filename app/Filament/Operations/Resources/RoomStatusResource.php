@@ -45,9 +45,12 @@ class RoomStatusResource extends Resource
                             ])
                             ->helperText('Occupied is managed by Check In/Check Out. Do not mark a checked-in suite as ready.')
                             ->required()
+                            ->live()
                             ->native(false),
                         Forms\Components\Textarea::make('housekeeping_notes')
-                            ->label('Housekeeping Notes')
+                            ->label(fn (Forms\Get $get): string => $get('status') === 'maintenance' ? 'Maintenance Note' : 'Housekeeping Notes')
+                            ->required(fn (Forms\Get $get): bool => $get('status') === 'maintenance')
+                            ->maxLength(1000)
                             ->rows(3)
                             ->placeholder('Any notes for the next shift...')
                             ->columnSpanFull(),
@@ -97,6 +100,10 @@ class RoomStatusResource extends Resource
                     ->label('Last Updated')
                     ->since()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('maintenance_note')
+                    ->label('Maintenance Note')
+                    ->state(fn (Room $record): ?string => $record->status === 'maintenance' ? $record->housekeeping_notes : null)
+                    ->wrap(),
             ])
             ->defaultSort('name')
             ->actions([
@@ -128,10 +135,27 @@ class RoomStatusResource extends Resource
                     ->icon('heroicon-o-wrench-screwdriver')
                     ->color('gray')
                     ->visible(fn (Room $record): bool => $record->status !== 'maintenance')
-                    ->requiresConfirmation()
-                    ->action(function (Room $record): void {
-                        $record->update(['status' => 'maintenance']);
+                    ->form([
+                        Forms\Components\Textarea::make('housekeeping_notes')
+                            ->label('Maintenance Note')
+                            ->helperText('Describe what needs repair. Leave out guest names and contact details.')
+                            ->required()
+                            ->maxLength(1000)
+                            ->rows(3),
+                    ])
+                    ->action(function (Room $record, array $data): void {
+                        $record->update([
+                            'status' => 'maintenance',
+                            'housekeeping_notes' => $data['housekeeping_notes'],
+                        ]);
                     }),
+                Action::make('share_maintenance')
+                    ->label('Share on WhatsApp')
+                    ->icon('heroicon-o-chat-bubble-left-right')
+                    ->visible(fn (Room $record): bool => $record->status === 'maintenance' && filled($record->housekeeping_notes))
+                    ->url(fn (Room $record): string => 'https://wa.me/?text='.rawurlencode(
+                        "Insignia Court maintenance\nRoom: {$record->name}\nIssue: {$record->housekeeping_notes}"
+                    ), shouldOpenInNewTab: true),
                 Tables\Actions\EditAction::make()
                     ->visible(fn (): bool => Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner()),
             ])
@@ -156,6 +180,8 @@ class RoomStatusResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return Auth::check();
+        $user = Auth::user();
+
+        return $user && ! $user->isStaff();
     }
 }

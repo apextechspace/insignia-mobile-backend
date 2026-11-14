@@ -49,15 +49,18 @@ class FlutterwaveService
             'meta'         => $data['meta'] ?? [],
             'customer'     => [
                 'email'       => !empty($data['user_email']) ? $data['user_email'] : 'guest@insigniacourt.com',
-                'phonenumber' => !empty($data['user_phone']) ? $data['user_phone'] : '+2348000000000',
                 'name'        => !empty($data['customer_name']) ? $data['customer_name'] : 'Insignia Guest',
             ],
             'customizations' => [
                 'title'       => 'Insignia Court Luxury Living',
                 'description' => substr($data['product_description'] ?? 'Hospitality Services', 0, 100),
-                'logo'        => 'https://insigniacourts.com/assets/logo-trimmed.png',
+                'logo'        => config('property.checkout_logo_url'),
             ],
         ];
+
+        if (filled($data['user_phone'] ?? null)) {
+            $payload['customer']['phonenumber'] = $data['user_phone'];
+        }
 
         Log::info('Flutterwave Payment Link Request:', [
             'endpoint'  => $endpoint,

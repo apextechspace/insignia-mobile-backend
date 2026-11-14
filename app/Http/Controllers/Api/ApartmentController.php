@@ -93,7 +93,7 @@ class ApartmentController extends Controller
         return response()->json([
             'message'      => 'Maintenance request submitted. Our team will contact you shortly.',
             'request'      => $maintenance,
-            'whatsapp_url' => 'https://wa.me/2349110111133?text=' . urlencode(
+            'whatsapp_url' => 'https://wa.me/' . preg_replace('/\D/', '', config('property.whatsapp_number')) . '?text=' . urlencode(
                 "🔧 MAINTENANCE REQUEST\n" .
                 "Resident: {$residentName}\n" .
                 "Category: {$validated['category']}\n" .

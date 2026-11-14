@@ -180,6 +180,8 @@ class ConsumableItemResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return Auth::check();
+        $user = Auth::user();
+
+        return $user && ! $user->isStaff();
     }
 }

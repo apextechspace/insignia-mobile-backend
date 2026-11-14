@@ -52,13 +52,36 @@ class DashboardSmokeAuditTest extends TestCase
     public function test_staff_dashboard_and_resource_visibility_render(): void
     {
         $this->auditPanel('operations', User::ROLE_STAFF);
-        Livewire::withoutLazyLoading()->test(\App\Filament\Operations\Widgets\OperationsDashboardWidget::class)->assertSuccessful();
+        Livewire::withoutLazyLoading()->test(\App\Filament\Operations\Widgets\OperationsDashboardWidget::class)
+            ->assertSee('My Tasks')->assertSee('My Shift')->assertDontSee('Pending Room Bookings');
+        $this->get(\App\Filament\Operations\Resources\AssetResource::getUrl('create', panel: 'operations'))->assertForbidden();
+        $this->get(\App\Filament\Operations\Resources\IncidentResource::getUrl('create', panel: 'operations'))->assertForbidden();
+        Livewire::test(\App\Filament\Operations\Resources\StaffTaskResource\Pages\ListStaffTasks::class)
+            ->callAction('reportIssue', data: ['title' => 'Leaking tap', 'type' => 'maintenance_failure', 'description' => 'Reception sink'])
+            ->assertHasNoActionErrors();
+        $this->assertDatabaseHas('incidents', ['title' => 'Leaking tap', 'reported_by' => auth()->id(), 'status' => 'reported']);
         $this->get('/admin')->assertForbidden();
     }
 
     public function test_front_desk_dashboard_and_resource_visibility_render(): void
     {
         $this->auditPanel('operations', User::ROLE_GUEST_RELATIONS);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 23:30:00', 'UTC'));
+        $guest = User::factory()->create(['name' => 'Lagos Midnight Arrival']);
+        $room = \App\Models\Room::create([
+            'name' => 'Front Desk Test Suite', 'type' => 'Suite', 'price_per_night' => 1000, 'status' => 'cleaning',
+        ]);
+        \App\Models\Booking::create([
+            'user_id' => $guest->id, 'room_id' => $room->id, 'check_in' => '2026-11-13',
+            'check_out' => '2026-11-14', 'status' => 'confirmed', 'paid_at' => now(), 'total_price' => 1000,
+        ]);
+        Livewire::withoutLazyLoading()->test(\App\Filament\Operations\Widgets\OperationsDashboardWidget::class)
+            ->assertSee('Today’s arrivals')
+            ->assertSee('Lagos Midnight Arrival')
+            ->assertSee('Room still being cleaned')
+            ->assertSee('Departures due')
+            ->assertSee('Needs Attention')
+            ->assertDontSee('Pending Room Bookings');
         $this->get('/admin')->assertForbidden();
     }
 }

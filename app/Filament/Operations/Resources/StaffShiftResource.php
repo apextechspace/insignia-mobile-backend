@@ -23,6 +23,11 @@ class StaffShiftResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
     protected static ?string $navigationLabel = 'Duty Roster';
+
+    public static function getNavigationLabel(): string
+    {
+        return Auth::user()?->isStaff() ? 'My Shift' : parent::getNavigationLabel();
+    }
     protected static ?string $navigationGroup = 'Operations';
     protected static ?int $navigationSort = 8;
 
@@ -58,16 +63,16 @@ class StaffShiftResource extends Resource
                             ->native(false),
                         Forms\Components\DatePicker::make('shift_date')
                             ->label('Shift Date')
-                            ->default(now())
+                            ->default(today(config('property.timezone')))
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('shift_type')
                             ->label('Shift Type')
                             ->options([
-                                'morning'  => '🌅 Morning Shift (07:00 - 15:30)',
-                                'evening'  => '🌆 Evening Shift (15:00 - 23:30)',
-                                'night'    => '🌙 Night Shift (23:00 - 07:30)',
-                                'full_day' => '☀️ Full Day Coverage (08:00 - 18:00)',
+                                'morning'  => '🌅 Morning Shift',
+                                'evening'  => '🌆 Evening Shift',
+                                'night'    => '🌙 Night Shift',
+                                'full_day' => '☀️ Full Day Coverage',
                             ])
                             ->required()
                             ->native(false),
@@ -182,7 +187,7 @@ class StaffShiftResource extends Resource
                     ->action(function (StaffShift $record): void {
                         $record->update([
                             'status' => 'present',
-                            'start_time' => now()->format('H:i:s'),
+                            'start_time' => now(config('property.timezone'))->format('H:i:s'),
                         ]);
 
                         Notification::make()
@@ -210,7 +215,7 @@ class StaffShiftResource extends Resource
                     ->action(function (StaffShift $record, array $data): void {
                         $record->update([
                             'status' => 'completed',
-                            'end_time' => now()->format('H:i:s'),
+                            'end_time' => now(config('property.timezone'))->format('H:i:s'),
                             'handover_notes' => $data['handover_notes'],
                         ]);
 

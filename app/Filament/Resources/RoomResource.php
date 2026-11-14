@@ -206,10 +206,13 @@ class RoomResource extends Resource
                                 ])
                                 ->default('available')
                                 ->required()
+                                ->live()
                                 ->native(false)
                                 ->helperText('Releasing from Cleaning to Ready requires a verified supervisor turnaround task.'),
                             Forms\Components\Textarea::make('housekeeping_notes')
-                                ->label('Turnover & Shift Notes')
+                                ->label(fn (Forms\Get $get): string => $get('status') === 'maintenance' ? 'Maintenance Note' : 'Turnover & Shift Notes')
+                                ->required(fn (Forms\Get $get): bool => $get('status') === 'maintenance')
+                                ->maxLength(1000)
                                 ->rows(3)
                                 ->placeholder('e.g. Master bath deep-cleaned, hypoallergenic pillows placed, linen refreshed.')
                                 ->helperText('Internal shift notes shared between housekeeping supervisors and front desk.'),
@@ -617,10 +620,13 @@ class RoomResource extends Resource
                                 'reserved' => 'Reserved',
                             ])
                             ->required()
+                            ->live()
                             ->native(false)
                             ->helperText('Occupied is managed by guest check-in/checkout workflows.'),
                         Forms\Components\Textarea::make('housekeeping_notes')
-                            ->label('Shift Notes')
+                            ->label(fn (Forms\Get $get): string => $get('status') === 'maintenance' ? 'Maintenance Note' : 'Shift Notes')
+                            ->required(fn (Forms\Get $get): bool => $get('status') === 'maintenance')
+                            ->maxLength(1000)
                             ->rows(3)
                             ->placeholder('Turnover observations, maintenance requirements, or supervisor release notes...'),
                     ])

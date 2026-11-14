@@ -50,6 +50,7 @@ class PettyCashResource extends Resource
                             ->options([
                                 'replenishment' => '📥 Float Top-up / Allocation',
                                 'disbursement'  => '📤 Direct Disbursement / Payout',
+                                'return' => 'Return Unused Funds',
                             ])
                             ->required()
                             ->reactive()
@@ -59,7 +60,13 @@ class PettyCashResource extends Resource
                             ->numeric()
                             ->prefix('₦')
                             ->required()
-                            ->minValue(100),
+                            ->minValue(0.01)->maxValue(9999999999.99),
+                        Forms\Components\Select::make('expense_id')
+                            ->label('Approved expense')
+                            ->relationship('expense', 'title', fn ($query) => $query->where('status', 'approved')->where('currency', 'NGN'))
+                            ->searchable()
+                            ->visible(fn (Forms\Get $get): bool => $get('type') === 'disbursement')
+                            ->required(fn (Forms\Get $get): bool => $get('type') === 'disbursement'),
                         Forms\Components\DateTimePicker::make('transaction_date')
                             ->label('Transaction Date & Time')
                             ->default(now())
@@ -75,7 +82,8 @@ class PettyCashResource extends Resource
                 Forms\Components\Section::make('Audit Verification & Receipt')
                     ->schema([
                         Forms\Components\FileUpload::make('receipt_photo')
-                            ->label('Physical Paper Receipt / Cash Voucher')
+                            ->label('Bank or card transaction evidence')
+                            ->required()
                             ->image()
                             ->disk('public')
                             ->directory('petty-cash-receipts')
@@ -111,6 +119,7 @@ class PettyCashResource extends Resource
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'replenishment' => 'Replenish (In)',
                         'disbursement'  => 'Disburse (Out)',
+                        'return' => 'Funds Returned',
                         default         => ucfirst($state),
                     })
                     ->color(fn (string $state): string => match ($state) {
@@ -147,6 +156,7 @@ class PettyCashResource extends Resource
                 SelectFilter::make('type')
                     ->options([
                         'replenishment' => 'Float Replenishment',
+                        'return' => 'Funds Returned',
                         'disbursement'  => 'Disbursement',
                     ]),
             ])

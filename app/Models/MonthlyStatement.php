@@ -22,6 +22,9 @@ class MonthlyStatement extends Model
         'submitted_at',
         'approved_by',
         'approved_at',
+        'snapshot',
+        'actual_float_balance',
+        'float_reconciliation_notes',
     ];
 
     protected $casts = [
@@ -32,6 +35,8 @@ class MonthlyStatement extends Model
         'net_payable_to_ipl' => 'decimal:2',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
+        'snapshot' => 'array',
+        'actual_float_balance' => 'decimal:2',
     ];
 
     public function submitter()

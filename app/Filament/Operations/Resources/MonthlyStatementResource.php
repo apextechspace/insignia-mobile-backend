@@ -5,6 +5,7 @@ namespace App\Filament\Operations\Resources;
 use App\Filament\Operations\Resources\MonthlyStatementResource\Pages;
 use App\Models\MonthlyStatement;
 use App\Models\User;
+use App\Services\MclStatementReport;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,6 +13,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Builder;
 
 class MonthlyStatementResource extends Resource
 {
@@ -21,6 +24,13 @@ class MonthlyStatementResource extends Resource
     protected static ?string $navigationLabel = 'Monthly Statements';
     protected static ?string $navigationGroup = 'Finance';
     protected static ?int $navigationSort = 4;
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        return Auth::user()?->isDeliveryPartner() ? $query->where('submitted_by', Auth::id()) : $query;
+    }
 
     public static function form(Form $form): Form
     {
@@ -35,8 +45,9 @@ class MonthlyStatementResource extends Resource
                             ->dehydrated(false),
                         Forms\Components\Select::make('year')
                             ->label('Year')
-                            ->options(array_combine(range(2025, 2030), range(2025, 2030)))
-                            ->default(date('Y'))
+                            ->options(fn () => array_combine(range(2025, now(config('property.timezone'))->year), range(2025, now(config('property.timezone'))->year)))
+                            ->default(fn () => now(config('property.timezone'))->year)
+                            ->disabledOn('edit')
                             ->required()
                             ->native(false),
                         Forms\Components\Select::make('month')
@@ -47,27 +58,23 @@ class MonthlyStatementResource extends Resource
                                 7 => 'July', 8 => 'August', 9 => 'September',
                                 10 => 'October', 11 => 'November', 12 => 'December',
                             ])
-                            ->default((int)date('n'))
+                            ->default(fn () => now(config('property.timezone'))->month)
+                            ->disabledOn('edit')
                             ->required()
                             ->native(false),
                     ])->columns(3),
                 Forms\Components\Section::make('Financial Summary')
                     ->schema([
-                        Forms\Components\TextInput::make('total_accommodation_revenue')
-                            ->label('Total Accommodation Revenue (₦)')
-                            ->numeric()->prefix('₦')->default(0),
-                        Forms\Components\TextInput::make('total_permitted_expenses')
-                            ->label('Total Permitted Expenses (₦)')
-                            ->numeric()->prefix('₦')->default(0),
                         Forms\Components\TextInput::make('management_fee_percentage')
                             ->label('Management Fee (%)')
-                            ->numeric()->suffix('%')->default(0),
-                        Forms\Components\TextInput::make('management_fee_amount')
-                            ->label('Management Fee Amount (₦)')
-                            ->numeric()->prefix('₦')->default(0),
-                        Forms\Components\TextInput::make('net_payable_to_ipl')
-                            ->label('Net Payable to IPL (₦)')
-                            ->numeric()->prefix('₦')->default(0),
+                            ->helperText('Use the agreed rate. The fee is calculated on positive net accommodation receipts after refunds and adjustments.')
+                            ->numeric()->minValue(0)->maxValue(100)->suffix('%')->default(0),
+                        Forms\Components\TextInput::make('actual_float_balance')
+                            ->label('Actual closing imprest balance (₦)')
+                            ->numeric()->minValue(0)->maxValue(9999999999.99)
+                            ->helperText('Use the bank or card balance at the close of the statement period.'),
+                        Forms\Components\Textarea::make('float_reconciliation_notes')
+                            ->label('Imprest reconciliation notes')->maxLength(4000),
                     ])->columns(2),
                 Forms\Components\Section::make('Documents & Status')
                     ->schema([
@@ -84,12 +91,12 @@ class MonthlyStatementResource extends Resource
                                 'approved_by_ipl'  => 'Approved by IPL',
                                 'settled'          => 'Settled',
                             ])
-                            ->disabled(fn(): bool => !Auth::user()?->isIplAdmin())
+                            ->disabled()->dehydrated(false)
                             ->native(false),
                         Forms\Components\Textarea::make('ipl_query_notes')
                             ->label('IPL Query Notes')
                             ->rows(3)
-                            ->visible(fn(): bool => Auth::user()?->isIplAdmin())
+                            ->disabled()->dehydrated(false)
                             ->columnSpanFull(),
                     ]),
             ]);
@@ -138,18 +145,40 @@ class MonthlyStatementResource extends Resource
             ])
             ->defaultSort('year', 'desc')
             ->actions([
+                Tables\Actions\ViewAction::make()->label('Open Statement'),
                 Action::make('submit_to_ipl')
-                    ->label('Submit to IPL')
+                    ->label(fn (MonthlyStatement $record) => $record->status === 'queried' ? 'Resubmit to IPL' : 'Submit to IPL')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('info')
                     ->visible(fn(MonthlyStatement $record): bool =>
-                        $record->status === 'draft' && Auth::user()?->isDeliveryPartner()
+                        self::canEdit($record)
                     )
                     ->requiresConfirmation()
-                    ->action(fn(MonthlyStatement $record) => $record->update([
-                        'status'       => 'submitted_to_ipl',
-                        'submitted_at' => now(),
-                    ])),
+                    ->modalDescription('Submit the current transaction totals and imprest reconciliation for IPL review.')
+                    ->action(function (MonthlyStatement $record): void {
+                        DB::transaction(function () use ($record): void {
+                            $statement = self::getEloquentQuery()->lockForUpdate()->findOrFail($record->id);
+                            abort_unless(self::canEdit($statement), 403);
+                            $report = app(MclStatementReport::class)->build($statement);
+                            if (($report['opening'] || $report['topups'] || $report['spending'] || $report['returned'])
+                                && ($report['actual'] === null || ($report['difference'] !== 0 && blank($statement->float_reconciliation_notes)))) {
+                                \Filament\Notifications\Notification::make()->danger()
+                                    ->title('Complete the imprest reconciliation first')
+                                    ->body('Enter the actual closing balance and explain any difference.')->send();
+
+                                return;
+                            }
+                            $statement->update([
+                                'snapshot' => $report,
+                                'total_accommodation_revenue' => $report['revenue'] / 100,
+                                'total_permitted_expenses' => $report['expenseTotal'] / 100,
+                                'management_fee_amount' => $report['fee'] / 100,
+                                'net_payable_to_ipl' => $report['net'] / 100,
+                                'status' => 'submitted_to_ipl',
+                                'submitted_at' => now(),
+                            ]);
+                        });
+                    }),
                 Action::make('approve')
                     ->label('Approve')
                     ->icon('heroicon-o-check-badge')
@@ -158,11 +187,14 @@ class MonthlyStatementResource extends Resource
                         Auth::user()?->isIplAdmin() && $record->status === 'submitted_to_ipl'
                     )
                     ->requiresConfirmation()
-                    ->action(fn(MonthlyStatement $record) => $record->update([
-                        'status'      => 'approved_by_ipl',
-                        'approved_by' => Auth::id(),
-                        'approved_at' => now(),
-                    ])),
+                    ->action(function (MonthlyStatement $record): void {
+                        abort_unless(Auth::user()?->isIplAdmin(), 403);
+                        MonthlyStatement::whereKey($record->id)->where('status', 'submitted_to_ipl')->update([
+                            'status' => 'approved_by_ipl',
+                            'approved_by' => Auth::id(),
+                            'approved_at' => now(),
+                        ]);
+                    }),
                 Action::make('query')
                     ->label('Query Statement')
                     ->icon('heroicon-o-question-mark-circle')
@@ -175,11 +207,23 @@ class MonthlyStatementResource extends Resource
                             ->label('What needs clarification?')
                             ->required()->rows(3),
                     ])
-                    ->action(fn(MonthlyStatement $record, array $data) => $record->update([
-                        'status'           => 'queried',
-                        'ipl_query_notes'  => $data['ipl_query_notes'],
-                    ])),
+                    ->action(function (MonthlyStatement $record, array $data): void {
+                        abort_unless(Auth::user()?->isIplAdmin(), 403);
+                        MonthlyStatement::whereKey($record->id)->where('status', 'submitted_to_ipl')->update([
+                            'status' => 'queried',
+                            'ipl_query_notes' => $data['ipl_query_notes'],
+                        ]);
+                    }),
                 Tables\Actions\EditAction::make(),
+                Action::make('settle')
+                    ->label('Mark Settled')
+                    ->visible(fn (MonthlyStatement $record) => Auth::user()?->isIplAdmin() && $record->status === 'approved_by_ipl')
+                    ->requiresConfirmation()
+                    ->action(function (MonthlyStatement $record): void {
+                        abort_unless(Auth::user()?->isIplAdmin(), 403);
+                        MonthlyStatement::whereKey($record->id)
+                            ->where('status', 'approved_by_ipl')->update(['status' => 'settled']);
+                    }),
             ]);
     }
 
@@ -189,6 +233,7 @@ class MonthlyStatementResource extends Resource
             'index'  => Pages\ListMonthlyStatements::route('/'),
             'create' => Pages\CreateMonthlyStatement::route('/create'),
             'edit'   => Pages\EditMonthlyStatement::route('/{record}/edit'),
+            'view'   => Pages\ViewMonthlyStatement::route('/{record}'),
         ];
     }
 
@@ -200,9 +245,10 @@ class MonthlyStatementResource extends Resource
     public static function canEdit($record): bool
     {
         if (Auth::user()?->isIplAdmin()) {
-            return $record->status !== 'settled';
+            return in_array($record->status, ['draft', 'queried'], true);
         }
         return Auth::user()?->isDeliveryPartner()
+            && (int) $record->submitted_by === (int) Auth::id()
             && in_array($record->status, ['draft', 'queried'], true);
     }
 

@@ -114,8 +114,8 @@ class GuestStayResource extends Resource
                     (bool) $record->checked_in_at => 'Guest is in house. On departure, collect keys and complete checkout to start housekeeping.',
                     !$record->paid_at => 'Await verified payment before checking in this guest.',
                     !in_array($record->status, ['confirmed', 'paid'], true) => 'This reservation is not active for check-in. Review its status with finance or operations.',
-                    today()->toDateString() < $record->check_in => 'Arrival is scheduled for a future date. Check-in opens on the arrival date.',
-                    today()->toDateString() >= $record->check_out => 'The scheduled stay has ended. Review the reservation before processing an arrival.',
+                    today(config('property.timezone'))->toDateString() < $record->check_in => 'Arrival is scheduled for a future date. Check-in opens on the arrival date.',
+                    today(config('property.timezone'))->toDateString() >= $record->check_out => 'The scheduled stay has ended. Review the reservation before processing an arrival.',
                     !in_array($record->room?->status, ['available', 'reserved'], true) => 'The suite is not ready. Resolve room readiness before check-in.',
                     default => 'Review the guest details, complete registration and verify identity. Hand over keys after check-in succeeds.',
                 })->columnSpanFull(),
@@ -161,7 +161,8 @@ class GuestStayResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->whereIn('status', ['confirmed', 'paid', 'completed']))
             ->defaultSort('check_in', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('Booking #')->sortable(),
+                Tables\Columns\TextColumn::make('id')->label('Booking #')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('payment_reference')->label('Booking reference')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('room.name')->label('Suite')->searchable(),
                 Tables\Columns\TextColumn::make('user.name')->label('Guest')->searchable(),
                 Tables\Columns\TextColumn::make('check_in')->date()->sortable(),
@@ -174,11 +175,11 @@ class GuestStayResource extends Resource
             ])
             ->filters([
                 Tables\Filters\Filter::make('arrivals_today')->label('Arrivals today')
-                    ->query(fn ($query) => $query->whereDate('check_in', today())->whereNull('checked_in_at')->whereNull('checked_out_at')),
+                    ->query(fn ($query) => $query->whereDate('check_in', today(config('property.timezone')))->whereNull('checked_in_at')->whereNull('checked_out_at')),
                 Tables\Filters\Filter::make('in_house')->label('In house')
                     ->query(fn ($query) => $query->whereNotNull('checked_in_at')->whereNull('checked_out_at')),
                 Tables\Filters\Filter::make('departures_due')->label('Departures due')
-                    ->query(fn ($query) => $query->whereNotNull('checked_in_at')->whereNull('checked_out_at')->whereDate('check_out', '<=', today())),
+                    ->query(fn ($query) => $query->whereNotNull('checked_in_at')->whereNull('checked_out_at')->whereDate('check_out', '<=', today(config('property.timezone')))),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()->label('Guest details'),

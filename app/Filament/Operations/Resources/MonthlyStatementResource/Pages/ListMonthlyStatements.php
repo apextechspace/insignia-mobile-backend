@@ -22,7 +22,7 @@ class ListMonthlyStatements extends ListRecords
                     return response()->streamDownload(function () {
                         $handle = fopen('php://output', 'w');
                         fputcsv($handle, ['Statement Code', 'Year', 'Month', 'Revenue (NGN)', 'Expenses (NGN)', 'Mgmt Fee (NGN)', 'Net to IPL (NGN)', 'Status']);
-                        MonthlyStatement::orderBy('year', 'desc')->orderBy('month', 'desc')->chunk(50, function ($rows) use ($handle) {
+                        MonthlyStatementResource::getEloquentQuery()->orderBy('year', 'desc')->orderBy('month', 'desc')->chunk(50, function ($rows) use ($handle) {
                             foreach ($rows as $row) {
                                 $monthName = is_numeric($row->month) && (int)$row->month >= 1 && (int)$row->month <= 12 
                                     ? date('F', mktime(0, 0, 0, (int)$row->month, 1)) 

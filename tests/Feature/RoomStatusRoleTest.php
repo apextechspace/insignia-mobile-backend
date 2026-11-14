@@ -17,7 +17,7 @@ class RoomStatusRoleTest extends TestCase
         $room = new Room(['name' => 'Test Suite', 'status' => 'available']);
         $this->actingAs(User::factory()->create(['role' => User::ROLE_STAFF]));
 
-        $this->assertTrue(RoomStatusResource::canViewAny());
+        $this->assertFalse(RoomStatusResource::canViewAny());
         $this->assertFalse(RoomStatusResource::canEdit($room));
     }
 

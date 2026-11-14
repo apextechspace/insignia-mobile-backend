@@ -46,7 +46,7 @@ class FinanceResourceRoleTest extends TestCase
     public function test_mcl_can_edit_draft_but_not_approved_statement(): void
     {
         $operator = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]);
-        $statement = new MonthlyStatement(['status' => 'draft']);
+        $statement = new MonthlyStatement(['status' => 'draft', 'submitted_by' => $operator->id]);
         $this->actingAs($operator);
         $this->assertTrue(MonthlyStatementResource::canEdit($statement));
 
@@ -54,7 +54,7 @@ class FinanceResourceRoleTest extends TestCase
         $this->assertFalse(MonthlyStatementResource::canEdit($statement));
 
         $this->actingAs(User::factory()->create(['role' => User::ROLE_IPL_ADMIN]));
-        $this->assertTrue(MonthlyStatementResource::canEdit($statement));
+        $this->assertFalse(MonthlyStatementResource::canEdit($statement));
         $statement->status = 'settled';
         $this->assertFalse(MonthlyStatementResource::canEdit($statement));
     }

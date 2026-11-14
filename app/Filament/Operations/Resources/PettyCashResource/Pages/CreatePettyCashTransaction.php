@@ -4,6 +4,7 @@ namespace App\Filament\Operations\Resources\PettyCashResource\Pages;
 
 use App\Filament\Operations\Resources\PettyCashResource;
 use App\Models\PettyCashTransaction;
+use App\Models\Expense;
 use App\Models\User;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -32,24 +33,37 @@ class CreatePettyCashTransaction extends CreateRecord
             // Every float write must use this same path to retain the guarantee.
             User::query()->orderBy('id')->lockForUpdate()->firstOrFail();
 
-            $amount = (float) ($data['amount'] ?? 0);
-            if (!is_finite($amount) || $amount < 100) {
-                throw ValidationException::withMessages(['amount' => 'Enter a valid amount of at least NGN 100.']);
+            $amount = (int) round((float) ($data['amount'] ?? 0) * 100);
+            if ($amount < 1 || $amount > 999999999999) {
+                throw ValidationException::withMessages(['data.amount' => 'Enter a valid NGN amount.']);
             }
             $type = $data['type'] ?? null;
-            if (!in_array($type, ['replenishment', 'disbursement'], true)) {
-                throw ValidationException::withMessages(['type' => 'Invalid operating float transaction.']);
+            if (!in_array($type, ['replenishment', 'disbursement', 'return'], true)) {
+                throw ValidationException::withMessages(['data.type' => 'Invalid operating float transaction.']);
             }
 
-            $balance = (float) (PettyCashTransaction::latest('id')->value('balance_after') ?? 0);
-            if ($type === 'disbursement' && $amount > $balance) {
-                throw ValidationException::withMessages(['amount' => 'Insufficient operating float for this disbursement.']);
+            $balance = (int) round((float) (PettyCashTransaction::latest('id')->value('balance_after') ?? 0) * 100);
+            if ($type === 'replenishment' && $balance + $amount > 999999999999) {
+                throw ValidationException::withMessages(['data.amount' => 'This top-up would exceed the maximum ledger balance.']);
+            }
+            if ($type !== 'replenishment' && $amount > $balance) {
+                throw ValidationException::withMessages(['data.amount' => 'Insufficient operating float for this transaction.']);
+            }
+            if ($type === 'disbursement') {
+                $expense = Expense::whereKey($data['expense_id'] ?? null)->where('status', 'approved')
+                    ->where('currency', 'NGN')->lockForUpdate()->first();
+                if (! $expense || (int) round((float) $expense->amount * 100) !== $amount
+                    || PettyCashTransaction::where('expense_id', $expense->id)->exists()) {
+                    throw ValidationException::withMessages(['data.expense_id' => 'Choose an approved, unused expense for the same amount.']);
+                }
+            } else {
+                $data['expense_id'] = null;
             }
 
             $data['handled_by'] = auth()->id();
             $data['approved_by'] = auth()->id();
-            $data['balance_after'] = $type === 'replenishment'
-                ? $balance + $amount : $balance - $amount;
+            $data['amount'] = $amount / 100;
+            $data['balance_after'] = ($type === 'replenishment' ? $balance + $amount : $balance - $amount) / 100;
 
             return PettyCashTransaction::create($data);
         }, 3);

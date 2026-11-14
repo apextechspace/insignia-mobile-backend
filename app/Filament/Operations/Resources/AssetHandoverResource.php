@@ -48,7 +48,7 @@ class AssetHandoverResource extends Resource
                                 'locked_and_signed_by_ipl' => '🔒 Locked & Countersigned by IPL',
                             ])
                             ->default('pending_mcl_review')
-                            ->disabled(fn () => !Auth::user()->isIplAdmin())
+                            ->disabled()->dehydrated(false)
                             ->required()
                             ->native(false),
                     ])->columns(3),
@@ -156,7 +156,8 @@ class AssetHandoverResource extends Resource
                     ->modalHeading('Confirm Physical Asset Verification')
                     ->modalDescription('By signing, you confirm that all suite assets, electronics, and fittings have been inspected in person and match inventory records.')
                     ->action(function (AssetHandover $record): void {
-                        $record->update([
+                        abort_unless(Auth::user()?->isIplAdmin() || Auth::user()?->isDeliveryPartner(), 403);
+                        AssetHandover::whereKey($record->id)->where('status', 'pending_mcl_review')->update([
                             'status' => 'verified_by_mcl',
                             'mcl_representative_id' => Auth::id(),
                             'mcl_signed_at' => now(),
@@ -181,7 +182,8 @@ class AssetHandoverResource extends Resource
                     ->modalHeading('Countersign & Lock Handover Protocol')
                     ->modalDescription('Locking this protocol establishes an immutable baseline for this apartment suite.')
                     ->action(function (AssetHandover $record): void {
-                        $record->update([
+                        abort_unless(Auth::user()?->isIplAdmin(), 403);
+                        AssetHandover::whereKey($record->id)->where('status', 'verified_by_mcl')->update([
                             'status' => 'locked_and_signed_by_ipl',
                             'ipl_representative_id' => Auth::id(),
                             'ipl_signed_at' => now(),
@@ -195,10 +197,23 @@ class AssetHandoverResource extends Resource
 
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (AssetHandover $record): bool =>
-                        $record->status !== 'locked_and_signed_by_ipl' || Auth::user()->isIplAdmin()
-                    ),
+                    ->visible(fn (AssetHandover $record): bool => self::canEdit($record)),
             ]);
+    }
+
+    public static function canViewAny(): bool
+    {
+        $user = Auth::user();
+
+        return $user && ! $user->isStaff() && parent::canViewAny();
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        $user = Auth::user();
+
+        return $record->status === 'pending_mcl_review'
+            && $user && ($user->isIplAdmin() || $user->isDeliveryPartner());
     }
 
     public static function getPages(): array

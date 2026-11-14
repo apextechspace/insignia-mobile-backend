@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Operations\Resources\ConsumableItemResource\Pages\ListConsumableItems;
+use App\Filament\Operations\Resources\RoomStatusResource\Pages\ListRoomStatuses;
 use App\Filament\Operations\Widgets\OperationsDashboardWidget;
 use App\Models\Booking;
 use App\Models\ConsumableItem;
@@ -19,6 +20,29 @@ use Tests\TestCase;
 class DashboardDataIntegrityAuditTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_flagging_maintenance_requires_a_note_and_enables_sharing(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]));
+        Filament::setCurrentPanel(Filament::getPanel('operations'));
+        $room = Room::create(['name' => 'Test Suite', 'type' => 'Suite', 'price_per_night' => 1000]);
+
+        $page = Livewire::test(ListRoomStatuses::class);
+        $page->callTableAction('mark_maintenance', $room, ['housekeeping_notes' => ''])
+            ->assertHasTableActionErrors(['housekeeping_notes' => 'required']);
+        $this->assertSame('available', $room->fresh()->status);
+
+        Livewire::test(ListRoomStatuses::class)
+            ->callTableAction('mark_maintenance', $room, ['housekeeping_notes' => 'AC leaking & needs inspection'])
+            ->assertHasNoTableActionErrors();
+
+        $room->refresh();
+        $this->assertSame('maintenance', $room->status);
+        $this->assertSame('AC leaking & needs inspection', $room->housekeeping_notes);
+        Livewire::test(ListRoomStatuses::class)->assertSee(
+            'https://wa.me/?text='.rawurlencode("Insignia Court maintenance\nRoom: Test Suite\nIssue: AC leaking & needs inspection")
+        );
+    }
 
     private function item(): ConsumableItem
     {
@@ -86,7 +110,7 @@ class DashboardDataIntegrityAuditTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => User::ROLE_STAFF]));
         Filament::setCurrentPanel(Filament::getPanel('operations'));
         $room = Room::create(['name' => 'Maintenance room', 'type' => 'Suite', 'price_per_night' => 1000, 'status' => 'maintenance']);
-        Livewire::test(\App\Filament\Operations\Resources\RoomStatusResource\Pages\ListRoomStatuses::class)->assertTableActionHidden('mark_ready', $room);
+        $this->get(\App\Filament\Operations\Resources\RoomStatusResource::getUrl(panel: 'operations'))->assertForbidden();
     }
 
     public function test_maintenance_room_with_active_guest_cannot_be_released_even_by_direct_edit(): void

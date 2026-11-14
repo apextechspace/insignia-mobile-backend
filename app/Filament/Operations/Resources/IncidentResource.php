@@ -119,6 +119,7 @@ class IncidentResource extends Resource
                             ->native(false),
                         Forms\Components\Toggle::make('is_escalated_to_ipl')
                             ->label('Escalate to IPL Management')
+                            ->live()
                             ->helperText('Flag this for IPL\'s attention without transferring operational responsibility'),
                         Forms\Components\Textarea::make('ipl_escalation_notes')
                             ->label('IPL Escalation Notes')
@@ -158,8 +159,7 @@ class IncidentResource extends Resource
                     ->colors([
                         'success' => 'low',
                         'warning' => 'medium',
-                        'danger'  => 'high',
-                        'danger'  => 'critical',
+                        'danger'  => fn (string $state): bool => in_array($state, ['high', 'critical'], true),
                     ])
                     ->formatStateUsing(fn(string $state): string => match ($state) {
                         'low'      => '🟢 Low',
@@ -179,11 +179,9 @@ class IncidentResource extends Resource
                     ->label('Status')
                     ->colors([
                         'gray'    => 'reported',
-                        'warning' => 'under_investigation',
-                        'warning' => 'awaiting_parts',
+                        'warning' => fn (string $state): bool => in_array($state, ['under_investigation', 'awaiting_parts'], true),
                         'danger'  => 'escalated_to_ipl',
-                        'success' => 'resolved',
-                        'success' => 'closed',
+                        'success' => fn (string $state): bool => in_array($state, ['resolved', 'closed'], true),
                     ])
                     ->formatStateUsing(fn(string $state): string => ucwords(str_replace('_', ' ', $state))),
                 Tables\Columns\IconColumn::make('is_escalated_to_ipl')
@@ -203,7 +201,8 @@ class IncidentResource extends Resource
                 ]),
                 SelectFilter::make('status')->options([
                     'reported' => 'Reported', 'under_investigation' => 'Investigating',
-                    'escalated_to_ipl' => 'Escalated', 'resolved' => 'Resolved',
+                    'awaiting_parts' => 'Awaiting Parts', 'escalated_to_ipl' => 'Escalated',
+                    'resolved' => 'Resolved', 'closed' => 'Closed',
                 ]),
             ])
             ->actions([
@@ -247,7 +246,7 @@ class IncidentResource extends Resource
         $user = Auth::user();
         return $user && in_array($user->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN,
-            User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS, User::ROLE_STAFF,
+            User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS,
         ]);
     }
 }
