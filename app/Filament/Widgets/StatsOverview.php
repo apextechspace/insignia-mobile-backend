@@ -29,7 +29,7 @@ class StatsOverview extends BaseWidget
             ->whereIn('status', ['confirmed', 'paid'])
             ->whereDate('check_in', '>=', today())->count();
 
-        // MCL Operations Statements awaiting IPL Review
+        // VRL Operations Statements awaiting IPL Review
         $pendingStatements = \App\Models\MonthlyStatement::where('status', 'submitted_to_ipl')->count();
 
         $totalRooms = \App\Models\Room::count();
@@ -55,7 +55,7 @@ class StatsOverview extends BaseWidget
                 ->description($receiptsWaitingForReview ? 'Check actual bank credit before approval' : 'No pending transfer receipts')
                 ->descriptionIcon('heroicon-m-shield-check', IconPosition::Before)
                 ->color($receiptsWaitingForReview ? 'warning' : 'success'),
-            Stat::make('MCL Statements', $pendingStatements)
+            Stat::make('VRL Statements', $pendingStatements)
                 ->description($pendingStatements > 0 ? 'Monthly billing awaiting IPL approval' : 'All statements reviewed')
                 ->descriptionIcon('heroicon-m-document-check', IconPosition::Before)
                 ->color($pendingStatements > 0 ? 'danger' : 'success'),

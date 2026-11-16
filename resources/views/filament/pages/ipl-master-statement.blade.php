@@ -50,7 +50,7 @@
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400">
             {{ $statement['from'] }} through {{ $statement['to'] }}. Running figures start at zero for the selected period/filter—not the actual opening bank balance.
-            Monthly MCL settlements and petty cash transfers are excluded to avoid double-counting internal movements. Approved expenses are operational records and may not have cleared the bank.
+            Monthly VRL settlements and petty cash transfers are excluded to avoid double-counting internal movements. Approved expenses are operational records and may not have cleared the bank.
             Refund ledger entries must be reconciled against actual provider/bank evidence separately.
         </p>
         <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">

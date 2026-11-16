@@ -42,7 +42,7 @@ class UserResource extends Resource
                             ->options([
                                 User::ROLE_ADMIN => 'System Super Admin',
                                 User::ROLE_IPL_ADMIN => 'IPL Property Owner (Master)',
-                                User::ROLE_DELIVERY_PARTNER => 'MCL Facility Manager',
+                                User::ROLE_DELIVERY_PARTNER => 'VRL Facility Manager',
                                 User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
                                 User::ROLE_STAFF => 'Housekeeping / Ops Staff',
                                 User::ROLE_USER => 'Executive Guest',
@@ -92,7 +92,7 @@ class UserResource extends Resource
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         User::ROLE_ADMIN => 'Super Admin',
                         User::ROLE_IPL_ADMIN => 'IPL Owner',
-                        User::ROLE_DELIVERY_PARTNER => 'MCL Manager',
+                        User::ROLE_DELIVERY_PARTNER => 'VRL Manager',
                         User::ROLE_GUEST_RELATIONS => 'Front Desk',
                         User::ROLE_STAFF => 'Housekeeping / Staff',
                         User::ROLE_USER, 'guest' => 'Guest',
@@ -117,7 +117,7 @@ class UserResource extends Resource
                     ->options([
                         User::ROLE_ADMIN => 'System Super Admin',
                         User::ROLE_IPL_ADMIN => 'IPL Property Owner',
-                        User::ROLE_DELIVERY_PARTNER => 'MCL Facility Manager',
+                        User::ROLE_DELIVERY_PARTNER => 'VRL Facility Manager',
                         User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
                         User::ROLE_STAFF => 'Housekeeping / Ops Staff',
                         User::ROLE_USER => 'Executive Guest',

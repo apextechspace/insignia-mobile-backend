@@ -166,7 +166,7 @@ class AccommodationLedgerResource extends Resource
     }
 
     /**
-     * IPL sees all. MCL (delivery_partner) sees read-only.
+     * IPL sees all. VRL (delivery_partner) sees read-only.
      * Staff and guest_relations are blocked.
      */
     public static function canViewAny(): bool

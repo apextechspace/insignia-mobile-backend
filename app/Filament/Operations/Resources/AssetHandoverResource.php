@@ -43,8 +43,8 @@ class AssetHandoverResource extends Resource
                         Forms\Components\Select::make('status')
                             ->label('Status')
                             ->options([
-                                'pending_mcl_review'      => '⏳ Pending MCL Physical Verification',
-                                'verified_by_mcl'         => '📝 Verified & Signed by MCL',
+                                'pending_mcl_review'      => '⏳ Pending VRL Physical Verification',
+                                'verified_by_mcl'         => '📝 Verified & Signed by VRL',
                                 'locked_and_signed_by_ipl' => '🔒 Locked & Countersigned by IPL',
                             ])
                             ->default('pending_mcl_review')
@@ -72,11 +72,11 @@ class AssetHandoverResource extends Resource
                 Forms\Components\Section::make('Digital Signatures & Audit Trail')
                     ->schema([
                         Forms\Components\Select::make('mcl_representative_id')
-                            ->label('MCL Signatory (Facility Operator)')
+                            ->label('VRL Signatory (Facility Operator)')
                             ->relationship('mclRepresentative', 'name')
                             ->disabled(),
                         Forms\Components\DateTimePicker::make('mcl_signed_at')
-                            ->label('MCL Timestamp')
+                            ->label('VRL Timestamp')
                             ->disabled(),
                         Forms\Components\Select::make('ipl_representative_id')
                             ->label('IPL Signatory (Property Owner)')
@@ -106,7 +106,7 @@ class AssetHandoverResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'pending_mcl_review' => 'Pending Verification',
-                        'verified_by_mcl' => 'Signed by MCL',
+                        'verified_by_mcl' => 'Signed by VRL',
                         'locked_and_signed_by_ipl' => 'Locked by IPL',
                         default => ucfirst($state),
                     })
@@ -117,10 +117,10 @@ class AssetHandoverResource extends Resource
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('mclRepresentative.name')
-                    ->label('MCL Rep')
+                    ->label('VRL Rep')
                     ->placeholder('Unsigned'),
                 Tables\Columns\TextColumn::make('mcl_signed_at')
-                    ->label('MCL Signed')
+                    ->label('VRL Signed')
                     ->dateTime('M d, H:i')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('iplRepresentative.name')
@@ -137,15 +137,15 @@ class AssetHandoverResource extends Resource
                     ->relationship('room', 'name'),
                 SelectFilter::make('status')
                     ->options([
-                        'pending_mcl_review' => 'Pending MCL Verification',
-                        'verified_by_mcl' => 'Verified & Signed by MCL',
+                        'pending_mcl_review' => 'Pending VRL Verification',
+                        'verified_by_mcl' => 'Verified & Signed by VRL',
                         'locked_and_signed_by_ipl' => 'Locked & Signed by IPL',
                     ]),
             ])
             ->actions([
-                // MCL Verify & Sign
+                // VRL Verify & Sign
                 Action::make('signMcl')
-                    ->label('MCL Sign')
+                    ->label('VRL Sign')
                     ->icon('heroicon-o-pencil-square')
                     ->color('info')
                     ->visible(fn (AssetHandover $record): bool =>
@@ -164,7 +164,7 @@ class AssetHandoverResource extends Resource
                         ]);
 
                         Notification::make()
-                            ->title('Protocol Verified & Signed by MCL')
+                            ->title('Protocol Verified & Signed by VRL')
                             ->success()
                             ->send();
                     }),
