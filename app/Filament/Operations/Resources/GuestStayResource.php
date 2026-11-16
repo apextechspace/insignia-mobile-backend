@@ -55,7 +55,9 @@ class GuestStayResource extends Resource
         if ($record->checked_out_at) return 'Checked out';
         if ($record->checked_in_at) return 'In house';
         if (!$record->paid_at && $record->status === 'cancelled') return 'Cancelled';
-        if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return 'Checkout expired';
+        if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return $record->reserved_by ? 'Hold expired' : 'Checkout expired';
+        if ($record->reserved_by && !$record->paid_at && $record->status === 'pending') return 'Temporary hold';
+        if (($record->reserved_by || $record->minimum_payment_kobo !== null) && !$record->paid_at && $record->status === 'confirmed') return 'Reserved · Deposit verified';
         if (!$record->paid_at) return 'Awaiting payment';
         if (in_array($record->status, ['confirmed', 'paid'], true)) return 'Awaiting arrival';
         return ucfirst($record->status);
@@ -109,6 +111,8 @@ class GuestStayResource extends Resource
                 TextEntry::make('room.status')->label('Current room readiness')->badge(),
                 TextEntry::make('check_in')->label('Scheduled arrival')->date(),
                 TextEntry::make('check_out')->label('Scheduled departure')->date(),
+                TextEntry::make('hold_expires_at')->label('Room hold expires')->dateTime()
+                    ->timezone(config('property.timezone'))->visible(fn (Booking $record) => $record->reserved_by && $record->status === 'pending'),
                 TextEntry::make('arrival_guidance')->label('Next step')->state(fn (Booking $record) => match (true) {
                     (bool) $record->checked_out_at => 'Stay completed. Housekeeping must finish and a supervisor must verify the room before it is released.',
                     (bool) $record->checked_in_at => 'Guest is in house. On departure, collect keys and complete checkout to start housekeeping.',
@@ -120,12 +124,40 @@ class GuestStayResource extends Resource
                     default => 'Review the guest details, complete registration and verify identity. Hand over keys after check-in succeeds.',
                 })->columnSpanFull(),
             ])->columns(3),
+            Section::make('Assisted payments')
+                ->visible(fn (Booking $record) => $record->reserved_by || $record->minimum_payment_kobo !== null)
+                ->schema([
+                    TextEntry::make('minimum_due')->label('Minimum to secure dates')->money('NGN')
+                        ->state(fn (Booking $record) => ($record->minimum_payment_kobo ?? \App\Services\AssistedReservationPayments::kobo($record->total_price)) / 100),
+                    TextEntry::make('verified_total')->label('Verified payments')->money('NGN')
+                        ->state(fn (Booking $record) => \App\Services\AssistedReservationPayments::verified($record) / 100),
+                    TextEntry::make('verified_percent')->label('Percentage paid')
+                        ->state(fn (Booking $record) => number_format(100 * \App\Services\AssistedReservationPayments::verified($record)
+                            / max(1, \App\Services\AssistedReservationPayments::kobo($record->total_price)), 2).'%'),
+                    TextEntry::make('balance_due')->label('Balance due before check-in')->money('NGN')
+                        ->state(fn (Booking $record) => (\App\Services\AssistedReservationPayments::kobo($record->total_price) - \App\Services\AssistedReservationPayments::verified($record)) / 100),
+                    TextEntry::make('deposit_exception_reason')->label('IPL deposit exception')->columnSpanFull()
+                        ->visible(fn (Booking $record) => filled($record->deposit_exception_reason)),
+                    \Filament\Infolists\Components\RepeatableEntry::make('pos_payments')->label('POS receipts')
+                        ->state(fn (Booking $record) => \App\Services\AssistedReservationPayments::entries($record)->orderBy('id')->get()
+                            ->map(fn ($payment) => [
+                                'reference' => $payment->reference,
+                                'amount' => $payment->amount_kobo / 100,
+                                'state' => $payment->verified_at ? 'Verified' : 'Pending IPL verification',
+                            ])->all())
+                        ->schema([
+                            TextEntry::make('reference'),
+                            TextEntry::make('amount')->money('NGN'),
+                            TextEntry::make('state')->label('Status'),
+                        ])->columns(3)->columnSpanFull(),
+                ])->columns(3),
             Section::make('Booking contact')->schema([
                 TextEntry::make('user.name')->label('Booked by')->placeholder('Not provided'),
                 TextEntry::make('user.email')->label('Email')->placeholder('Not provided'),
                 TextEntry::make('user.phone')->label('Phone')->placeholder('Not provided'),
                 TextEntry::make('booking_contact.name')->label('Lead guest name')->placeholder('Not provided'),
                 TextEntry::make('booking_contact.phone')->label('Lead guest phone')->placeholder('Not provided'),
+                TextEntry::make('booking_contact.email')->label('Lead guest email')->placeholder('Not provided'),
                 TextEntry::make('guests')->label('Guests'),
                 TextEntry::make('special_requests')->label('Booking requests')->placeholder('None')->columnSpanFull(),
             ])->columns(3),
@@ -158,13 +190,19 @@ class GuestStayResource extends Resource
     {
         return $table
             ->recordUrl(fn (Booking $record) => self::getUrl('view', ['record' => $record]))
-            ->modifyQueryUsing(fn ($query) => $query->whereIn('status', ['confirmed', 'paid', 'completed']))
+            ->modifyQueryUsing(fn ($query) => $query->where(fn ($stays) => $stays
+                ->whereIn('status', ['confirmed', 'paid', 'completed'])
+                ->orWhereNotNull('reserved_by')))
             ->defaultSort('check_in', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('id')->label('Booking #')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('payment_reference')->label('Booking reference')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('room.name')->label('Suite')->searchable(),
-                Tables\Columns\TextColumn::make('user.name')->label('Guest')->searchable(),
+                Tables\Columns\TextColumn::make('user.name')->label('Guest')
+                    ->state(fn (Booking $record) => $record->booking_contact['name'] ?? $record->user?->name)
+                    ->searchable(query: fn ($query, string $search) => $query->where(fn ($match) => $match
+                        ->where('booking_contact->name', 'like', "%{$search}%")
+                        ->orWhereHas('user', fn ($guest) => $guest->where('name', 'like', "%{$search}%")))),
                 Tables\Columns\TextColumn::make('check_in')->date()->sortable(),
                 Tables\Columns\TextColumn::make('check_out')->date()->sortable(),
                 Tables\Columns\TextColumn::make('checked_in_at')->label('Actual arrival')->dateTime()->placeholder('Not arrived'),
@@ -174,8 +212,12 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => self::stayStage($record))->badge(),
             ])
             ->filters([
+                Tables\Filters\Filter::make('pos_review')->label('POS receipts awaiting IPL')
+                    ->query(fn ($query) => $query->whereExists(fn ($payments) => $payments
+                        ->selectRaw('1')->from('assisted_reservation_payments')
+                        ->whereColumn('booking_id', 'bookings.id')->whereNull('verified_at'))),
                 Tables\Filters\Filter::make('arrivals_today')->label('Arrivals today')
-                    ->query(fn ($query) => $query->whereDate('check_in', today(config('property.timezone')))->whereNull('checked_in_at')->whereNull('checked_out_at')),
+                    ->query(fn ($query) => $query->whereIn('status', ['confirmed', 'paid'])->whereDate('check_in', today(config('property.timezone')))->whereNull('checked_in_at')->whereNull('checked_out_at')),
                 Tables\Filters\Filter::make('in_house')->label('In house')
                     ->query(fn ($query) => $query->whereNotNull('checked_in_at')->whereNull('checked_out_at')),
                 Tables\Filters\Filter::make('departures_due')->label('Departures due')

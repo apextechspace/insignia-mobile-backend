@@ -19,6 +19,8 @@ class ManualBankSettings extends Page
     public string $accountNumber = '';
     public string $accountName = '';
     public bool $active = false;
+    public bool $depositsEnabled = false;
+    public string $minimumDeposit = '50';
 
     public static function canAccess(): bool
     {
@@ -28,6 +30,9 @@ class ManualBankSettings extends Page
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
+        $policy = DB::table('reservation_payment_policy')->find(1);
+        $this->depositsEnabled = (bool) $policy->deposits_enabled;
+        $this->minimumDeposit = (string) $policy->minimum_percent;
         $account = ManualBankAccount::current() ?: ManualBankAccount::query()->latest('id')->first();
         if ($account) {
             $this->bankName = $account->bank_name;
@@ -35,6 +40,20 @@ class ManualBankSettings extends Page
             $this->accountName = $account->account_name;
             $this->active = $account->is_active;
         }
+    }
+
+    public function saveDepositPolicy(): void
+    {
+        abort_unless(static::canAccess(), 403);
+        $data = $this->validate([
+            'depositsEnabled' => ['boolean'],
+            'minimumDeposit' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:100'],
+        ]);
+        DB::table('reservation_payment_policy')->where('id', 1)->update([
+            'deposits_enabled' => $data['depositsEnabled'],
+            'minimum_percent' => $data['minimumDeposit'],
+        ]);
+        \Filament\Notifications\Notification::make()->success()->title('Deposit policy saved')->send();
     }
 
     public function save(): void

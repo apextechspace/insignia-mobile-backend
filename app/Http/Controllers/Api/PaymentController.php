@@ -57,6 +57,8 @@ class PaymentController extends Controller
         switch ($orderType) {
             case 'booking':
                 $record = Booking::with('room')->where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
+                abort_if($record->reserved_by !== null || $record->minimum_payment_kobo !== null, 422,
+                    'Please contact Front Desk to pay the balance on this reservation.');
                 $amount = $record->total_price;
                 $suiteName = $record->room->name ?? 'Suite';
                 $productName = "Insignia Suite: {$suiteName}";

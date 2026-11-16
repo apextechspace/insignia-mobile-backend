@@ -22,7 +22,7 @@ class CustomerPaymentEmail extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $notifiable->email ? ['mail'] : [];
+        return $notifiable->routeNotificationFor('mail') ? ['mail'] : [];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -31,7 +31,7 @@ class CustomerPaymentEmail extends Notification implements ShouldQueue
             ->subject($this->details['title'] . ' | Insignia Courts')
             ->view('emails.customer-payment', [
                 'details' => $this->details,
-                'customerName' => $notifiable->name,
+                'customerName' => $this->details['customer_name'] ?? $notifiable->name ?? 'Guest',
             ]);
     }
 }

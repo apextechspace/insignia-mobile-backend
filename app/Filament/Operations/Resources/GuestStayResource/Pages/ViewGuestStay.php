@@ -3,8 +3,15 @@
 namespace App\Filament\Operations\Resources\GuestStayResource\Pages;
 
 use App\Filament\Operations\Resources\GuestStayResource;
+use App\Services\AssistedReservationPayments;
 use Filament\Actions\Action;
+use Filament\Forms\Components;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class ViewGuestStay extends ViewRecord
 {
@@ -18,6 +25,87 @@ class ViewGuestStay extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('approveDepositException')->label('Approve Deposit Exception')
+                ->authorize(fn () => auth()->user()?->isIplAdmin()
+                    && AssistedReservationPayments::canCollect($this->record)
+                    && $this->record->status === 'pending'
+                    && AssistedReservationPayments::verified($this->record) > 0)
+                ->form([Components\Textarea::make('reason')->required()->maxLength(1000)])
+                ->action(function (Action $action, array $data): void {
+                    try {
+                        app(AssistedReservationPayments::class)->approveDepositException($this->record, auth()->user(), $data['reason']);
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title($exception->getMessage())->send();
+                        $action->halt();
+                    }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Deposit exception approved. Dates secured.')->send();
+                }),
+            Action::make('recordPosPayment')->label('Record POS Payment')
+                ->authorize(fn () => GuestStayResource::canViewAny() && AssistedReservationPayments::canCollect($this->record))
+                ->form([
+                    Components\TextInput::make('amount')->label('Amount on POS receipt (₦)')
+                        ->required()->numeric()->rules(['decimal:0,2'])->minValue(0.01)->maxValue(99999999.99),
+                    Components\TextInput::make('reference')->label('Bank transaction reference')->required()->maxLength(120),
+                    Components\DatePicker::make('transaction_date')->required()
+                        ->maxDate(fn () => today(config('property.timezone'))),
+                    Components\FileUpload::make('proof')->label('POS receipt')->image()->maxSize(5120)->storeFiles(false)->required(),
+                ])
+                ->action(function (array $data): void {
+                    abort_unless(GuestStayResource::canViewAny(), 403);
+                    $file = $data['proof'] ?? null;
+                    $reference = strtoupper(trim($data['reference']));
+                    if (! $file instanceof TemporaryUploadedFile || $reference === '') {
+                        throw ValidationException::withMessages(['data.proof' => 'A receipt and transaction reference are required.']);
+                    }
+                    DB::transaction(function () use ($data, $file, $reference): void {
+                        $stay = $this->record->newQuery()->lockForUpdate()->findOrFail($this->record->id);
+                        abort_unless(AssistedReservationPayments::canCollect($stay), 409);
+                        $amount = AssistedReservationPayments::kobo($data['amount']);
+                        if ($amount > AssistedReservationPayments::kobo($stay->total_price) - AssistedReservationPayments::verified($stay)) {
+                            throw ValidationException::withMessages(['data.amount' => 'The amount exceeds the outstanding balance.']);
+                        }
+                        if (AssistedReservationPayments::entries($stay)->where('reference', $reference)->exists()) {
+                            throw ValidationException::withMessages(['data.reference' => 'This reference is already recorded on the reservation.']);
+                        }
+                        $path = $file->store('assisted-pos-receipts', 'local');
+                        abort_unless(is_string($path) && $path !== '', 500);
+                        DB::table('assisted_reservation_payments')->insert([
+                            'booking_id' => $stay->id, 'submitted_by' => auth()->id(), 'amount_kobo' => $amount,
+                            'reference' => $reference, 'transaction_date' => $data['transaction_date'], 'proof_path' => $path,
+                            'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    });
+                    Notification::make()->success()->title('POS receipt submitted for IPL verification')->send();
+                }),
+            Action::make('downloadPosProof')->label('Download POS Proof')
+                ->authorize(fn () => (bool) auth()->user()?->isIplAdmin())
+                ->form([Components\Select::make('payment_id')->label('Payment')->required()
+                    ->options(fn () => $this->paymentOptions())])
+                ->action(function (array $data) {
+                    abort_unless(auth()->user()?->isIplAdmin(), 403);
+                    $payment = AssistedReservationPayments::entries($this->record)->where('id', $data['payment_id'])->first();
+                    abort_unless($payment && Storage::disk('local')->exists($payment->proof_path), 404);
+
+                    return Storage::disk('local')->download($payment->proof_path);
+                }),
+            Action::make('verifyPosPayment')->label('Verify POS Payment')
+                ->authorize(fn () => auth()->user()?->isIplAdmin() && AssistedReservationPayments::canCollect($this->record))
+                ->form([
+                    Components\Select::make('payment_id')->label('Payment')->required()
+                        ->options(fn () => $this->paymentOptions(pendingOnly: true)),
+                    Components\Checkbox::make('verified')->label('I matched the amount and reference against the merchant transaction record')->accepted(),
+                ])
+                ->action(function (Action $action, array $data): void {
+                    try {
+                        app(AssistedReservationPayments::class)->verify($this->record, (int) $data['payment_id'], auth()->user());
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title($exception->getMessage())->send();
+                        $action->halt();
+                    }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Payment verified')->send();
+                }),
             Action::make('check_in')->label('Check In')->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('success')->modalHeading('Register guest and check in')
                 ->modalSubmitActionLabel('Complete check-in')
@@ -37,5 +125,14 @@ class ViewGuestStay extends ViewRecord
                     $this->record->refresh();
                 }),
         ];
+    }
+
+    private function paymentOptions(bool $pendingOnly = false): array
+    {
+        return AssistedReservationPayments::entries($this->record)
+            ->when($pendingOnly, fn ($query) => $query->whereNull('verified_at'))
+            ->get()->mapWithKeys(fn ($payment) => [
+                $payment->id => $payment->reference.' · ₦'.number_format($payment->amount_kobo / 100, 2),
+            ])->all();
     }
 }

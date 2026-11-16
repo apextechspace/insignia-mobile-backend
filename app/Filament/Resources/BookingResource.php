@@ -23,7 +23,9 @@ class BookingResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return parent::canEdit($record) && !$record->paid_at && !$record->checked_in_at && !$record->checked_out_at;
+        return parent::canEdit($record) && $record->user_id !== null
+            && $record->reserved_by === null && $record->minimum_payment_kobo === null
+            && !$record->paid_at && !$record->checked_in_at && !$record->checked_out_at;
     }
 
     public static function form(Form $form): Form

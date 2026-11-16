@@ -13,6 +13,24 @@ class GuestAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_email_verification_links_only_secured_desk_reservations_for_that_mailbox(): void
+    {
+        $staff = User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS]);
+        $room = \App\Models\Room::create(['name' => 'Test Suite', 'type' => 'Suite', 'price_per_night' => 100000]);
+        $base = [
+            'room_id' => $room->id, 'reserved_by' => $staff->id, 'total_price' => 100000,
+            'check_in' => today()->addDay()->toDateString(), 'check_out' => today()->addDays(2)->toDateString(),
+        ];
+        $secured = \App\Models\Booking::create($base + ['status' => 'confirmed', 'booking_contact' => ['email' => 'Guest@example.test']]);
+        $pending = \App\Models\Booking::create($base + ['status' => 'pending', 'booking_contact' => ['email' => 'guest@example.test']]);
+        $other = \App\Models\Booking::create($base + ['status' => 'confirmed', 'booking_contact' => ['email' => 'other@example.test']]);
+        [$id, $mail] = $this->access();
+        $userId = $this->postJson('/api/guest-access/verify', ['request_id' => $id, 'code' => $mail->code])->assertOk()->json('user.id');
+        $this->assertEquals($userId, $secured->fresh()->user_id);
+        $this->assertNull($pending->fresh()->user_id);
+        $this->assertNull($other->fresh()->user_id);
+    }
+
     private function access(string $email = 'guest@example.test', array $details = []): array
     {
         Notification::fake();

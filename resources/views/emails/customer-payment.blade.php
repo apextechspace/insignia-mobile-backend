@@ -19,7 +19,11 @@
 @if ($details['check_in'])
 <tr><th scope="row" align="left" style="font-weight:normal;">Check-in / Check-out</th><td align="right">{{ $details['check_in'] }} / {{ $details['check_out'] }}</td></tr>
 @endif
-<tr style="background:#4a0e2e;color:#fff;"><th scope="row" align="left">{{ $details['receipt'] ? 'Total paid' : 'Amount due' }}</th><td align="right" style="font-size:22px;font-weight:bold;">NGN {{ $details['amount'] }}</td></tr>
+<tr style="background:#4a0e2e;color:#fff;"><th scope="row" align="left">{{ isset($details['balance_due']) ? 'Payment received' : ($details['receipt'] ? 'Total paid' : 'Amount due') }}</th><td align="right" style="font-size:22px;font-weight:bold;">NGN {{ $details['amount'] }}</td></tr>
+@isset($details['balance_due'])
+<tr><th scope="row" align="left">Balance due before check-in</th><td align="right">NGN {{ $details['balance_due'] }}</td></tr>
+<tr><th scope="row" align="left">Reservation</th><td align="right">{{ $details['reservation_status'] }}</td></tr>
+@endisset
 </table>
 <p style="font-size:13px;line-height:1.7;color:#70656a;margin-top:24px;">For assistance, contact our guest relations team and quote the reference above.</p>
 </td></tr>

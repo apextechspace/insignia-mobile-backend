@@ -66,6 +66,13 @@ class GuestAccessController extends Controller
             }
             // Never replace an existing customer's name/phone from a login request.
             $user->forceFill(['email_verified_at' => $user->email_verified_at ?: now()])->save();
+            // Link secured desk reservations after the guest proves ownership of the mailbox.
+            // Updating only ownership also permits claiming an already-paid stay.
+            \App\Models\Booking::whereNull('user_id')
+                ->where(fn ($query) => $query->whereNotNull('reserved_by')->orWhereNotNull('minimum_payment_kobo'))
+                ->whereIn('status', ['confirmed', 'paid', 'completed'])
+                ->whereRaw("LOWER(" . DB::connection()->getQueryGrammar()->wrap('booking_contact->email') . ") = ?", [$access->email])
+                ->update(['user_id' => $user->id]);
             DB::table('guest_access_requests')->where('id', $access->id)->update(['consumed_at' => now()]);
 
             return $user;

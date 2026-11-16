@@ -17,7 +17,8 @@ class BookingController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($booking) {
             Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
             $record = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
-            abort_unless(!$record->paid_at && $record->status === 'pending' && $record->hold_expires_at, 409);
+            abort_unless($record->reserved_by === null && $record->minimum_payment_kobo === null
+                && !$record->paid_at && $record->status === 'pending' && $record->hold_expires_at, 409);
             $record->update(['status' => 'cancelled']);
         }, 3);
         return response()->json(['message' => 'Checkout released. Any late payment will require finance review.']);
@@ -40,27 +41,8 @@ class BookingController extends Controller
         // approvals use the same room lock, so overlapping paid stays cannot
         // be missed between the availability check and reservation creation.
         $booking = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $validated) {
-            $room = Room::whereKey($validated['room_id'])->lockForUpdate()->firstOrFail();
-
-            if (!$room->is_available || $room->status === 'maintenance') {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'room_id' => 'This suite is unavailable for reservations.',
-                ]);
-            }
-
-            $overlap = \App\Services\RoomAvailability::blocking($validated['check_in'], $validated['check_out'])
-                ->where('room_id', $room->id)->exists();
-
-            if ($overlap) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'room_id' => 'This suite is booked or temporarily held for those dates. Please choose another suite or try again later.',
-                ]);
-            }
-
-            $nights = (new \DateTimeImmutable($validated['check_in']))
-                ->diff(new \DateTimeImmutable($validated['check_out']))->days;
-            $totalPrice = $nights * $room->price_per_night;
-
+            $room = \App\Services\RoomAvailability::lockAvailableRoom((int) $validated['room_id'], $validated['check_in'], $validated['check_out']);
+            $totalPrice = \App\Services\RoomAvailability::quote($room, $validated['check_in'], $validated['check_out']);
             $receiptUrl = $request->hasFile('receipt')
                 ? $request->file('receipt')->store('receipts', 'public') : null;
 

@@ -62,11 +62,11 @@ class BookingObserver
                         'gross_amount' => $booking->total_price,
                         'net_amount' => $booking->total_price,
                         'payment_method' => $booking->payment_method ?: 'flutterwave',
-                        'channel' => 'app',
+                        'channel' => $booking->reserved_by || $booking->minimum_payment_kobo !== null ? 'direct' : 'app',
                         'status' => 'confirmed',
                         'collected_by' => 'ipl',
                         'transaction_date' => $booking->paid_at ?: now(),
-                        'notes' => 'Automated split-ledger entry from Mobile App Booking #' . $booking->id,
+                        'notes' => 'Verified accommodation booking #' . $booking->id,
                         'created_by' => $booking->user_id,
                     ]);
             }

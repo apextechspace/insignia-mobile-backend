@@ -24,7 +24,7 @@ class Booking extends Model
         'checked_out_at' => 'datetime',
     ];
 
-    protected $hidden = ['guest_registration', 'booking_contact'];
+    protected $hidden = ['guest_registration', 'booking_contact', 'reserved_by', 'deposit_exception_by', 'deposit_exception_reason', 'deposit_exception_at'];
 
     public function checkedInBy()
     {
@@ -38,6 +38,8 @@ class Booking extends Model
 
     protected $fillable = [
         'user_id',
+        'reserved_by',
+        'minimum_payment_kobo',
         'hold_expires_at',
         'guests',
         'special_requests',
