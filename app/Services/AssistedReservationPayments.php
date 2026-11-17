@@ -35,6 +35,23 @@ class AssistedReservationPayments
         return (int) self::entries($booking)->whereNotNull('verified_at')->sum('amount_kobo');
     }
 
+    public static function balance(Booking $booking): int
+    {
+        return max(0, self::kobo($booking->total_price) - self::verified($booking));
+    }
+
+    public static function reviewHoldExpiry(Booking $booking): ?\Illuminate\Support\Carbon
+    {
+        if ($booking->status !== 'pending' || ! $booking->hold_expires_at?->isFuture()
+            || self::entries($booking)->exists()) {
+            return null;
+        }
+
+        $deadline = now()->addMinutes(config('property.pos_review_hold_minutes'));
+
+        return $deadline->gt($booking->hold_expires_at) ? $deadline : null;
+    }
+
     public function verify(Booking $booking, int $paymentId, User $reviewer): void
     {
         abort_unless(self::canVerify($reviewer), 403);

@@ -56,7 +56,10 @@ class GuestStayResource extends Resource
         if ($record->checked_in_at) return 'In house';
         if (!$record->paid_at && $record->status === 'cancelled') return 'Cancelled';
         if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return $record->reserved_by ? 'Hold expired' : 'Checkout expired';
-        if ($record->reserved_by && !$record->paid_at && $record->status === 'pending') return 'Temporary hold';
+        if ($record->reserved_by && !$record->paid_at && $record->status === 'pending') {
+            return \App\Services\AssistedReservationPayments::entries($record)->whereNull('verified_at')->exists()
+                ? 'Payment under review' : 'Temporary hold';
+        }
         if (($record->reserved_by || $record->minimum_payment_kobo !== null) && !$record->paid_at && $record->status === 'confirmed') return 'Reserved · Deposit verified';
         if (!$record->paid_at) return 'Awaiting payment';
         if (in_array($record->status, ['confirmed', 'paid'], true)) return 'Awaiting arrival';
@@ -116,6 +119,7 @@ class GuestStayResource extends Resource
                 TextEntry::make('arrival_guidance')->label('Next step')->state(fn (Booking $record) => match (true) {
                     (bool) $record->checked_out_at => 'Stay completed. Housekeeping must finish and a supervisor must verify the room before it is released.',
                     (bool) $record->checked_in_at => 'Guest is in house. On departure, collect keys and complete checkout to start housekeeping.',
+                    !$record->paid_at && $record->reserved_by && $record->status === 'confirmed' => 'Use Collect Balance to record the remaining payment. Verify it before checking in this guest.',
                     !$record->paid_at => 'Await verified payment before checking in this guest.',
                     !in_array($record->status, ['confirmed', 'paid'], true) => 'This reservation is not active for check-in. Review its status with finance or operations.',
                     today(config('property.timezone'))->toDateString() < $record->check_in => 'Arrival is scheduled for a future date. Check-in opens on the arrival date.',

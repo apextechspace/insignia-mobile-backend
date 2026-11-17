@@ -4,6 +4,7 @@ namespace App\Filament\Operations\Resources\GuestStayResource\Pages;
 
 use App\Filament\Operations\Resources\GuestStayResource;
 use App\Services\AssistedReservationPayments;
+use App\Models\Room;
 use Filament\Actions\Action;
 use Filament\Forms\Components;
 use Filament\Notifications\Notification;
@@ -41,8 +42,15 @@ class ViewGuestStay extends ViewRecord
                     $this->record->refresh();
                     Notification::make()->success()->title('Deposit exception approved. Dates secured.')->send();
                 }),
-            Action::make('recordPosPayment')->label('Record POS Payment')
+            Action::make('recordPosPayment')
+                ->label(fn (): string => $this->record->status === 'confirmed' ? 'Collect Balance' : 'Record POS Payment')
                 ->authorize(fn () => GuestStayResource::canViewAny() && AssistedReservationPayments::canCollect($this->record))
+                ->modalDescription(fn (): string => $this->record->status === 'confirmed'
+                    ? 'Outstanding balance: ₦'.number_format(AssistedReservationPayments::balance($this->record) / 100, 2).'. Upload the POS receipt after collecting payment. Check-in opens once the full balance is verified.'
+                    : 'The first receipt uploaded during an active hold gives staff two hours to verify the payment.')
+                ->fillForm(fn (): array => $this->record->status === 'confirmed'
+                    ? ['amount' => number_format(AssistedReservationPayments::balance($this->record) / 100, 2, '.', '')]
+                    : [])
                 ->form([
                     Components\TextInput::make('amount')->label('Amount on POS receipt (₦)')
                         ->required()->numeric()->rules(['decimal:0,2'])->minValue(0.01)->maxValue(99999999.99),
@@ -58,16 +66,18 @@ class ViewGuestStay extends ViewRecord
                     if (! $file instanceof TemporaryUploadedFile || $reference === '') {
                         throw ValidationException::withMessages(['data.proof' => 'A receipt and transaction reference are required.']);
                     }
-                    DB::transaction(function () use ($data, $file, $reference): void {
+                    $reviewExpiry = DB::transaction(function () use ($data, $file, $reference) {
+                        Room::whereKey($this->record->room_id)->lockForUpdate()->firstOrFail();
                         $stay = $this->record->newQuery()->lockForUpdate()->findOrFail($this->record->id);
                         abort_unless(AssistedReservationPayments::canCollect($stay), 409);
                         $amount = AssistedReservationPayments::kobo($data['amount']);
-                        if ($amount > AssistedReservationPayments::kobo($stay->total_price) - AssistedReservationPayments::verified($stay)) {
+                        if ($amount > AssistedReservationPayments::balance($stay)) {
                             throw ValidationException::withMessages(['data.amount' => 'The amount exceeds the outstanding balance.']);
                         }
                         if (AssistedReservationPayments::entries($stay)->where('reference', $reference)->exists()) {
                             throw ValidationException::withMessages(['data.reference' => 'This reference is already recorded on the reservation.']);
                         }
+                        $reviewExpiry = AssistedReservationPayments::reviewHoldExpiry($stay);
                         $path = $file->store('assisted-pos-receipts', 'local');
                         abort_unless(is_string($path) && $path !== '', 500);
                         DB::table('assisted_reservation_payments')->insert([
@@ -75,8 +85,16 @@ class ViewGuestStay extends ViewRecord
                             'reference' => $reference, 'transaction_date' => $data['transaction_date'], 'proof_path' => $path,
                             'created_at' => now(), 'updated_at' => now(),
                         ]);
+                        if ($reviewExpiry) {
+                            $stay->update(['hold_expires_at' => $reviewExpiry]);
+                        }
+
+                        return $reviewExpiry;
                     });
-                    Notification::make()->success()->title('POS receipt submitted for verification')->send();
+                    $this->record->refresh();
+                    Notification::make()->success()->title('POS receipt submitted for verification')
+                        ->body($reviewExpiry ? 'Room held until '.$reviewExpiry->timezone(config('property.timezone'))->format('g:i A T').'.' : null)
+                        ->send();
                 }),
             Action::make('downloadPosProof')->label('Download POS Proof')
                 ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()))

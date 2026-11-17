@@ -32,6 +32,8 @@ class FrontDeskReservationTest extends TestCase
         $page = \App\Filament\Operations\Resources\GuestStayResource\Pages\ViewGuestStay::class;
         $this->actingAs($manager);
         \Illuminate\Support\Facades\Storage::fake('local');
+        $originalHold = $stay->hold_expires_at;
+        $reviewHold = null;
         foreach (['POS-A', 'POS-B'] as $reference) {
             $proof = \Illuminate\Http\UploadedFile::fake()->createWithContent('pos.png',
                 base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1uoAAAAASUVORK5CYII='));
@@ -42,6 +44,16 @@ class FrontDeskReservationTest extends TestCase
                 ->set('mountedActionsData.0.reference', $reference)
                 ->set('mountedActionsData.0.transaction_date', today(config('property.timezone'))->toDateString())
                 ->callMountedAction()->assertHasNoActionErrors();
+            if ($reviewHold === null) {
+                $reviewHold = $stay->fresh()->hold_expires_at;
+                $this->assertTrue($reviewHold->gt($originalHold));
+                $this->assertSame('Payment under review', GuestStayResource::stayStage($stay->fresh()));
+                $this->travel(16)->minutes();
+                $this->assertTrue(\App\Services\RoomAvailability::blocking($stay->check_in, $stay->check_out)
+                    ->whereKey($stay->id)->exists());
+            } else {
+                $this->assertTrue($stay->fresh()->hold_expires_at->equalTo($reviewHold));
+            }
         }
         $this->assertDatabaseCount('assisted_reservation_payments', 2);
         $this->actingAs($owner);
@@ -51,6 +63,9 @@ class FrontDeskReservationTest extends TestCase
         $this->assertSame('confirmed', $stay->status);
         $this->assertNull($stay->hold_expires_at);
         $this->assertFalse(GuestStayResource::canCheckIn($stay));
+        Livewire::test($page, ['record' => $stay->id])
+            ->assertActionHasLabel('recordPosPayment', 'Collect Balance')
+            ->mountAction('recordPosPayment')->assertActionDataSet(['amount' => '150000.00']);
         $this->actingAs($manager);
         Livewire::test($page, ['record' => $stay->id])->assertActionHidden('verifyPosPayment');
         \Illuminate\Support\Facades\DB::table('reservation_payment_policy')->where('id', 1)
