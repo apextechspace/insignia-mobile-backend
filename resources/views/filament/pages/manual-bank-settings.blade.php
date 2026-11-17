@@ -32,6 +32,8 @@
             <p>Applies to new staff reservations. Full verified payment is due before check-in.</p>
             <label class="block"><input type="checkbox" wire:model="depositsEnabled"> Allow deposits to secure room dates</label>
             <label class="block">Minimum deposit (%) <input type="number" step="0.01" min="0.01" max="100" wire:model="minimumDeposit" required></label>
+            <label class="block"><input type="checkbox" wire:model="vrlCanVerifyPos"> Allow VRL managers to verify assisted POS payments</label>
+            <p>Managers must match the amount and reference against the merchant transaction record. IPL still handles deposit exceptions.</p>
             @error('minimumDeposit') <p>{{ $message }}</p> @enderror
             <x-filament::button type="submit">Save deposit policy</x-filament::button>
         </form>

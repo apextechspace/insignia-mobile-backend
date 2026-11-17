@@ -76,21 +76,21 @@ class ViewGuestStay extends ViewRecord
                             'created_at' => now(), 'updated_at' => now(),
                         ]);
                     });
-                    Notification::make()->success()->title('POS receipt submitted for IPL verification')->send();
+                    Notification::make()->success()->title('POS receipt submitted for verification')->send();
                 }),
             Action::make('downloadPosProof')->label('Download POS Proof')
-                ->authorize(fn () => (bool) auth()->user()?->isIplAdmin())
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()))
                 ->form([Components\Select::make('payment_id')->label('Payment')->required()
                     ->options(fn () => $this->paymentOptions())])
                 ->action(function (array $data) {
-                    abort_unless(auth()->user()?->isIplAdmin(), 403);
+                    abort_unless(AssistedReservationPayments::canVerify(auth()->user()), 403);
                     $payment = AssistedReservationPayments::entries($this->record)->where('id', $data['payment_id'])->first();
                     abort_unless($payment && Storage::disk('local')->exists($payment->proof_path), 404);
 
                     return Storage::disk('local')->download($payment->proof_path);
                 }),
             Action::make('verifyPosPayment')->label('Verify POS Payment')
-                ->authorize(fn () => auth()->user()?->isIplAdmin() && AssistedReservationPayments::canCollect($this->record))
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && AssistedReservationPayments::canCollect($this->record))
                 ->form([
                     Components\Select::make('payment_id')->label('Payment')->required()
                         ->options(fn () => $this->paymentOptions(pendingOnly: true)),

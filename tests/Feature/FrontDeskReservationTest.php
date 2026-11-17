@@ -51,9 +51,16 @@ class FrontDeskReservationTest extends TestCase
         $this->assertSame('confirmed', $stay->status);
         $this->assertNull($stay->hold_expires_at);
         $this->assertFalse(GuestStayResource::canCheckIn($stay));
+        $this->actingAs($manager);
+        Livewire::test($page, ['record' => $stay->id])->assertActionHidden('verifyPosPayment');
+        \Illuminate\Support\Facades\DB::table('reservation_payment_policy')->where('id', 1)
+            ->update(['vrl_can_verify_pos' => true]);
+        $frontDesk = User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS]);
+        $this->assertFalse(\App\Services\AssistedReservationPayments::canVerify($frontDesk));
         Livewire::test($page, ['record' => $stay->id])
             ->callAction('verifyPosPayment', data: ['payment_id' => 2, 'verified' => true])->assertHasNoActionErrors();
         $this->assertTrue(GuestStayResource::canCheckIn($stay->fresh()));
+        $this->assertDatabaseHas('assisted_reservation_payments', ['id' => 2, 'verified_by' => $manager->id]);
         $this->assertDatabaseCount('accommodation_ledgers', 1);
     }
 

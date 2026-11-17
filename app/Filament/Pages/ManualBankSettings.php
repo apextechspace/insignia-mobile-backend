@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 class ManualBankSettings extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-building-library';
-    protected static ?string $navigationLabel = 'Bank Transfer Settings';
+    protected static ?string $navigationLabel = 'Bank Transfer & Deposit Settings';
     protected static ?string $navigationGroup = 'Finance';
     protected static ?int $navigationSort = 2;
     protected static string $view = 'filament.pages.manual-bank-settings';
@@ -21,6 +21,7 @@ class ManualBankSettings extends Page
     public bool $active = false;
     public bool $depositsEnabled = false;
     public string $minimumDeposit = '50';
+    public bool $vrlCanVerifyPos = false;
 
     public static function canAccess(): bool
     {
@@ -33,6 +34,7 @@ class ManualBankSettings extends Page
         $policy = DB::table('reservation_payment_policy')->find(1);
         $this->depositsEnabled = (bool) $policy->deposits_enabled;
         $this->minimumDeposit = (string) $policy->minimum_percent;
+        $this->vrlCanVerifyPos = (bool) $policy->vrl_can_verify_pos;
         $account = ManualBankAccount::current() ?: ManualBankAccount::query()->latest('id')->first();
         if ($account) {
             $this->bankName = $account->bank_name;
@@ -47,11 +49,13 @@ class ManualBankSettings extends Page
         abort_unless(static::canAccess(), 403);
         $data = $this->validate([
             'depositsEnabled' => ['boolean'],
+            'vrlCanVerifyPos' => ['boolean'],
             'minimumDeposit' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:100'],
         ]);
         DB::table('reservation_payment_policy')->where('id', 1)->update([
             'deposits_enabled' => $data['depositsEnabled'],
             'minimum_percent' => $data['minimumDeposit'],
+            'vrl_can_verify_pos' => $data['vrlCanVerifyPos'],
         ]);
         \Filament\Notifications\Notification::make()->success()->title('Deposit policy saved')->send();
     }

@@ -22,6 +22,9 @@ class ListGuestStays extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('depositSettings')->label('Deposit Settings')
+                ->visible(fn () => auth()->user()?->isIplAdmin())
+                ->url(fn () => \App\Filament\Pages\ManualBankSettings::getUrl(panel: 'admin')),
             Action::make('newReservation')
                 ->label('New Reservation')
                 ->authorize(fn (): bool => GuestStayResource::canViewAny())

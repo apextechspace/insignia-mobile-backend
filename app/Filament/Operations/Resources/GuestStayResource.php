@@ -143,7 +143,7 @@ class GuestStayResource extends Resource
                             ->map(fn ($payment) => [
                                 'reference' => $payment->reference,
                                 'amount' => $payment->amount_kobo / 100,
-                                'state' => $payment->verified_at ? 'Verified' : 'Pending IPL verification',
+                                'state' => $payment->verified_at ? 'Verified' : 'Pending verification',
                             ])->all())
                         ->schema([
                             TextEntry::make('reference'),
@@ -212,7 +212,7 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => self::stayStage($record))->badge(),
             ])
             ->filters([
-                Tables\Filters\Filter::make('pos_review')->label('POS receipts awaiting IPL')
+                Tables\Filters\Filter::make('pos_review')->label('POS receipts awaiting verification')
                     ->query(fn ($query) => $query->whereExists(fn ($payments) => $payments
                         ->selectRaw('1')->from('assisted_reservation_payments')
                         ->whereColumn('booking_id', 'bookings.id')->whereNull('verified_at'))),

@@ -37,7 +37,7 @@ class AssistedReservationPayments
 
     public function verify(Booking $booking, int $paymentId, User $reviewer): void
     {
-        abort_unless($reviewer->isIplAdmin(), 403);
+        abort_unless(self::canVerify($reviewer), 403);
 
         try {
             DB::transaction(function () use ($booking, $paymentId, $reviewer): void {
@@ -103,6 +103,13 @@ class AssistedReservationPayments
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages(['payment_id' => 'This bank transaction reference has already been credited.']);
         }
+    }
+
+    public static function canVerify(?User $reviewer): bool
+    {
+        return $reviewer !== null && ($reviewer->isIplAdmin()
+            || ($reviewer->isDeliveryPartner()
+                && (bool) DB::table('reservation_payment_policy')->where('id', 1)->value('vrl_can_verify_pos')));
     }
 
     public function approveDepositException(Booking $booking, User $reviewer, string $reason): void
