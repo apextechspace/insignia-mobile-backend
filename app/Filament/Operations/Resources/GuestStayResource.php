@@ -142,18 +142,20 @@ class GuestStayResource extends Resource
                         ->state(fn (Booking $record) => (\App\Services\AssistedReservationPayments::kobo($record->total_price) - \App\Services\AssistedReservationPayments::verified($record)) / 100),
                     TextEntry::make('deposit_exception_reason')->label('IPL deposit exception')->columnSpanFull()
                         ->visible(fn (Booking $record) => filled($record->deposit_exception_reason)),
-                    \Filament\Infolists\Components\RepeatableEntry::make('pos_payments')->label('POS receipts')
+                    \Filament\Infolists\Components\RepeatableEntry::make('pos_payments')->label('Payment history')
                         ->state(fn (Booking $record) => \App\Services\AssistedReservationPayments::entries($record)->orderBy('id')->get()
                             ->map(fn ($payment) => [
                                 'reference' => $payment->reference,
+                                'method' => \App\Services\AssistedReservationPayments::METHODS[$payment->method],
                                 'amount' => $payment->amount_kobo / 100,
                                 'state' => $payment->verified_at ? 'Verified' : 'Pending verification',
                             ])->all())
                         ->schema([
                             TextEntry::make('reference'),
+                            TextEntry::make('method'),
                             TextEntry::make('amount')->money('NGN'),
                             TextEntry::make('state')->label('Status'),
-                        ])->columns(3)->columnSpanFull(),
+                        ])->columns(4)->columnSpanFull(),
                 ])->columns(3),
             Section::make('Booking contact')->schema([
                 TextEntry::make('user.name')->label('Booked by')->placeholder('Not provided'),
@@ -216,7 +218,7 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => self::stayStage($record))->badge(),
             ])
             ->filters([
-                Tables\Filters\Filter::make('pos_review')->label('POS receipts awaiting verification')
+                Tables\Filters\Filter::make('pos_review')->label('Payments awaiting verification')
                     ->query(fn ($query) => $query->whereExists(fn ($payments) => $payments
                         ->selectRaw('1')->from('assisted_reservation_payments')
                         ->whereColumn('booking_id', 'bookings.id')->whereNull('verified_at'))),

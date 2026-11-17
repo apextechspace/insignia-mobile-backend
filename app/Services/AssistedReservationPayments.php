@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class AssistedReservationPayments
 {
+    public const METHODS = ['pos' => 'POS', 'bank_transfer' => 'Direct bank transfer'];
+
     public static function minimum(string $total): int
     {
         $policy = DB::table('reservation_payment_policy')->find(1);
@@ -81,7 +83,7 @@ class AssistedReservationPayments
                     'bank_transaction_reference' => $payment->reference,
                     'verified_amount' => $payment->amount_kobo / 100,
                     'decision' => 'approved',
-                    'notes' => 'Assisted POS payment #'.$payment->id,
+                    'notes' => 'Assisted payment #'.$payment->id.' ('.self::METHODS[$payment->method].')',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -95,13 +97,14 @@ class AssistedReservationPayments
                 }
                 if ($verified === $total) {
                     $stay->paid_at = now();
-                    $stay->payment_method = 'pos';
+                    $methods = self::entries($stay)->whereNotNull('verified_at')->distinct()->pluck('method');
+                    $stay->payment_method = $methods->count() === 1 ? $methods->first() : 'mixed';
                 }
                 $stay->save();
                 $email = $stay->booking_contact['email'] ?? null;
                 if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     \Illuminate\Support\Facades\Notification::route('mail', $email)->notify(new \App\Notifications\CustomerPaymentEmail([
-                        'title' => 'POS payment receipt',
+                        'title' => 'Payment receipt',
                         'receipt' => true,
                         'number' => 'Booking-'.$stay->id,
                         'customer_name' => $stay->booking_contact['name'] ?? 'Guest',
@@ -110,7 +113,7 @@ class AssistedReservationPayments
                         'balance_due' => number_format(($total - $verified) / 100, 2),
                         'reservation_status' => $stay->status === 'confirmed' ? 'Dates secured' : 'Dates not yet secured',
                         'reference' => $payment->reference,
-                        'method' => 'POS',
+                        'method' => self::METHODS[$payment->method],
                         'date' => $payment->transaction_date,
                         'check_in' => $stay->check_in,
                         'check_out' => $stay->check_out,

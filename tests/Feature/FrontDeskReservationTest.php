@@ -41,6 +41,7 @@ class FrontDeskReservationTest extends TestCase
                 ->mountAction('recordPosPayment')
                 ->set('mountedActionsData.0.proof', [$proof])
                 ->set('mountedActionsData.0.amount', '150000')
+                ->set('mountedActionsData.0.method', $reference === 'POS-A' ? 'pos' : 'bank_transfer')
                 ->set('mountedActionsData.0.reference', $reference)
                 ->set('mountedActionsData.0.transaction_date', today(config('property.timezone'))->toDateString())
                 ->callMountedAction()->assertHasNoActionErrors();
@@ -75,6 +76,7 @@ class FrontDeskReservationTest extends TestCase
         Livewire::test($page, ['record' => $stay->id])
             ->callAction('verifyPosPayment', data: ['payment_id' => 2, 'verified' => true])->assertHasNoActionErrors();
         $this->assertTrue(GuestStayResource::canCheckIn($stay->fresh()));
+        $this->assertSame('mixed', $stay->fresh()->payment_method);
         $this->assertDatabaseHas('assisted_reservation_payments', ['id' => 2, 'verified_by' => $manager->id]);
         $this->assertDatabaseCount('accommodation_ledgers', 1);
     }
