@@ -14,6 +14,10 @@ class CreateExpense extends CreateRecord
     {
         $data['logged_by'] = Auth::id();
         $data['status'] = 'pending_approval';
+        if (! Auth::user()?->isIplAdmin()) {
+            $data['financial_stream'] = 'accommodation';
+        }
+
         return $data;
     }
 }

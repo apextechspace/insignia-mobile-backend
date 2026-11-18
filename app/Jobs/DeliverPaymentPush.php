@@ -18,6 +18,7 @@ class DeliverPaymentPush implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public array $backoff = [30, 120];
 
     public function __construct(
@@ -30,11 +31,15 @@ class DeliverPaymentPush implements ShouldQueue
     public function handle(): void
     {
         $user = User::find($this->userId);
-        if (!$user || !$user->expo_push_token) {
+        if (! $user || ! $user->expo_push_token) {
+            return;
+        }
+        if (in_array($user->role, [User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS, User::ROLE_STAFF], true)
+            && ($this->data['type'] ?? null) === 'verified_commerce_payment') {
             return;
         }
 
-        if (!ExpoPushService::send($user->expo_push_token, $this->title, $this->message,
+        if (! ExpoPushService::send($user->expo_push_token, $this->title, $this->message,
             $this->data ?: ['type' => 'payment_activity'])) {
             // ExpoPushService returns false for HTTP errors as well as failures;
             // throwing lets the queue driver retry instead of silently dropping.

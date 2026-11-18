@@ -4,15 +4,14 @@ namespace App\Filament\Operations\Resources;
 
 use App\Filament\Operations\Resources\ExpenseResource\Pages;
 use App\Models\Expense;
-use App\Models\Room;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
@@ -21,8 +20,11 @@ class ExpenseResource extends Resource
     protected static ?string $model = Expense::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
+
     protected static ?string $navigationLabel = 'Expenses';
+
     protected static ?string $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
@@ -39,17 +41,23 @@ class ExpenseResource extends Resource
                         Forms\Components\Select::make('category')
                             ->label('Category')
                             ->options([
-                                'utilities_phcn'      => 'Utilities – PHCN / Electricity',
-                                'generator_fuel'      => 'Generator Fuel',
+                                'utilities_phcn' => 'Utilities – PHCN / Electricity',
+                                'generator_fuel' => 'Generator Fuel',
                                 'maintenance_repairs' => 'Maintenance & Repairs',
                                 'consumables_restock' => 'Consumables Restock',
-                                'security'            => 'Security',
-                                'petty_cash'          => 'Petty Cash',
-                                'staff_welfare'       => 'Staff Welfare',
-                                'other'               => 'Other',
+                                'security' => 'Security',
+                                'petty_cash' => 'Petty Cash',
+                                'staff_welfare' => 'Staff Welfare',
+                                'other' => 'Other',
                             ])
                             ->required()
                             ->native(false),
+                        Forms\Components\Select::make('financial_stream')
+                            ->label('Financial stream')
+                            ->options(['accommodation' => 'Accommodation', 'auxiliary' => 'Auxiliary'])
+                            ->placeholder('Unclassified — owner review required')
+                            ->visible(fn (): bool => Auth::user()?->isIplAdmin())
+                            ->dehydrated(fn (): bool => Auth::user()?->isIplAdmin()),
                         Forms\Components\TextInput::make('amount')
                             ->label('Amount (₦)')
                             ->numeric()
@@ -59,8 +67,8 @@ class ExpenseResource extends Resource
                             ->label('Disbursement Method')
                             ->options([
                                 'bank_transfer' => 'Bank Transfer (Electronic)',
-                                'debit_card'    => 'Company Debit Card / POS',
-                                'petty_cash'    => 'Digital Operating Float',
+                                'debit_card' => 'Company Debit Card / POS',
+                                'petty_cash' => 'Digital Operating Float',
                             ])
                             ->default('bank_transfer')
                             ->required()
@@ -95,18 +103,18 @@ class ExpenseResource extends Resource
                             ->label('Status')
                             ->options([
                                 'pending_approval' => 'Pending Approval',
-                                'approved'         => 'Approved',
-                                'rejected'         => 'Rejected',
+                                'approved' => 'Approved',
+                                'rejected' => 'Rejected',
                             ])
-                            ->disabled(fn(): bool => !Auth::user()?->isIplAdmin())
+                            ->disabled(fn (): bool => ! Auth::user()?->isIplAdmin())
                             ->native(false),
                         Forms\Components\Textarea::make('rejection_reason')
                             ->label('Rejection Reason (IPL only)')
                             ->rows(2)
-                            ->visible(fn(): bool => Auth::user()?->isIplAdmin())
+                            ->visible(fn (): bool => Auth::user()?->isIplAdmin())
                             ->columnSpanFull(),
                     ])
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
             ]);
     }
 
@@ -116,12 +124,18 @@ class ExpenseResource extends Resource
             ->modifyQueryUsing(function (Builder $query): Builder {
                 $user = Auth::user();
                 // IPL sees all expenses; non-IPL sees only their own
-                if (!$user?->isIplAdmin()) {
+                if (! $user?->isIplAdmin()) {
                     $query->where('logged_by', $user->id);
                 }
+
                 return $query;
             })
             ->columns([
+                Tables\Columns\TextColumn::make('financial_stream')
+                    ->label('Financial stream')
+                    ->placeholder('Unclassified')
+                    ->badge()
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
                 Tables\Columns\TextColumn::make('title')
                     ->label('Description')
                     ->searchable()
@@ -129,15 +143,15 @@ class ExpenseResource extends Resource
                     ->weight('medium'),
                 Tables\Columns\BadgeColumn::make('category')
                     ->label('Category')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'utilities_phcn'      => '💡 PHCN/Utilities',
-                        'generator_fuel'      => '⛽ Generator Fuel',
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'utilities_phcn' => '💡 PHCN/Utilities',
+                        'generator_fuel' => '⛽ Generator Fuel',
                         'maintenance_repairs' => '🔧 Maintenance',
                         'consumables_restock' => '📦 Consumables',
-                        'security'            => '🔒 Security',
-                        'petty_cash'          => '💵 Petty Cash',
-                        'staff_welfare'       => '👷 Staff Welfare',
-                        default               => ucwords(str_replace('_', ' ', $state)),
+                        'security' => '🔒 Security',
+                        'petty_cash' => '💵 Petty Cash',
+                        'staff_welfare' => '👷 Staff Welfare',
+                        default => ucwords(str_replace('_', ' ', $state)),
                     }),
                 Tables\Columns\TextColumn::make('amount')
                     ->label('Amount')
@@ -146,7 +160,7 @@ class ExpenseResource extends Resource
                 Tables\Columns\TextColumn::make('payment_method')
                     ->label('Payment')
                     ->badge()
-                    ->formatStateUsing(fn(string $state): string => ucwords(str_replace('_', ' ', $state))),
+                    ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
                 Tables\Columns\TextColumn::make('room.name')
                     ->label('Room')
                     ->placeholder('Property-wide'),
@@ -155,17 +169,17 @@ class ExpenseResource extends Resource
                     ->colors([
                         'warning' => 'pending_approval',
                         'success' => 'approved',
-                        'danger'  => 'rejected',
+                        'danger' => 'rejected',
                     ])
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
                         'pending_approval' => '⏳ Pending',
-                        'approved'         => '✅ Approved',
-                        'rejected'         => '❌ Rejected',
-                        default            => ucfirst($state),
+                        'approved' => '✅ Approved',
+                        'rejected' => '❌ Rejected',
+                        default => ucfirst($state),
                     }),
                 Tables\Columns\TextColumn::make('loggedBy.name')
                     ->label('Logged By')
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
                 Tables\Columns\TextColumn::make('expense_date')
                     ->label('Date')
                     ->date('d M Y')
@@ -176,18 +190,18 @@ class ExpenseResource extends Resource
                 SelectFilter::make('category')
                     ->label('Category')
                     ->options([
-                        'utilities_phcn'      => 'PHCN/Utilities',
-                        'generator_fuel'      => 'Generator Fuel',
+                        'utilities_phcn' => 'PHCN/Utilities',
+                        'generator_fuel' => 'Generator Fuel',
                         'maintenance_repairs' => 'Maintenance',
                         'consumables_restock' => 'Consumables',
-                        'petty_cash'          => 'Petty Cash',
+                        'petty_cash' => 'Petty Cash',
                     ]),
                 SelectFilter::make('status')
                     ->label('Status')
                     ->options([
                         'pending_approval' => 'Pending',
-                        'approved'         => 'Approved',
-                        'rejected'         => 'Rejected',
+                        'approved' => 'Approved',
+                        'rejected' => 'Rejected',
                     ]),
             ])
             ->actions([
@@ -195,51 +209,51 @@ class ExpenseResource extends Resource
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn(Expense $record): bool =>
-                        Auth::user()?->isIplAdmin() && $record->status === 'pending_approval'
+                    ->visible(fn (Expense $record): bool => Auth::user()?->isIplAdmin() && $record->status === 'pending_approval'
                     )
                     ->requiresConfirmation()
                     ->action(function (Expense $record): void {
                         $record->update([
-                            'status'      => 'approved',
+                            'status' => 'approved',
                             'approved_by' => Auth::id(),
                             'approved_at' => now(),
                         ]);
                     }),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
             ]);
     }
 
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListExpenses::route('/'),
+            'index' => Pages\ListExpenses::route('/'),
             'create' => Pages\CreateExpense::route('/create'),
-            'edit'   => Pages\EditExpense::route('/{record}/edit'),
+            'edit' => Pages\EditExpense::route('/{record}/edit'),
         ];
     }
 
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-        if (!Auth::user()?->isIplAdmin()) {
-            $query->where('logged_by', Auth::id() ?? 0);
+        if (! Auth::user()?->isIplAdmin()) {
+            $query->where('logged_by', Auth::id() ?? 0)->where('financial_stream', 'accommodation');
         }
+
         return $query;
     }
 
     public static function canView($record): bool
     {
         return Auth::user()?->isIplAdmin()
-            || (Auth::check() && (int) $record->logged_by === (int) Auth::id());
+            || (Auth::check() && $record->financial_stream === 'accommodation' && (int) $record->logged_by === (int) Auth::id());
     }
 
     public static function canEdit($record): bool
     {
         return auth()->user()?->isIplAdmin()
-            || ((int) $record->logged_by === (int) auth()->id()
+            || ($record->financial_stream === 'accommodation' && (int) $record->logged_by === (int) auth()->id()
                 && $record->status === 'pending_approval');
     }
 
@@ -251,6 +265,7 @@ class ExpenseResource extends Resource
     public static function canViewAny(): bool
     {
         $user = Auth::user();
+
         return $user && in_array($user->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN,
             User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS,

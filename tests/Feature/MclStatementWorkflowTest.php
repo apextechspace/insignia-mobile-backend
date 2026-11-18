@@ -42,6 +42,13 @@ class MclStatementWorkflowTest extends TestCase
                 'transaction_date' => '2026-10-05 10:00:00',
             ]);
         }
+        foreach (['auxiliary', null] as $stream) {
+            Expense::create([
+                'title' => 'Non-accommodation expense', 'financial_stream' => $stream,
+                'category' => 'other', 'amount' => 9000, 'status' => 'approved',
+                'logged_by' => $manager->id, 'expense_date' => '2026-10-05 09:00:00',
+            ]);
+        }
         Livewire::test(ListMonthlyStatements::class)->callTableAction('submit_to_ipl', $statement);
         $statement->refresh();
         $this->assertSame('submitted_to_ipl', $statement->status);

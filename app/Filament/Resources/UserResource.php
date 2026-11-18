@@ -6,13 +6,12 @@ use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
-use Filament\Support\Enums\Alignment;
+use Filament\Tables;
+use Filament\Tables\Table;
 
 class UserResource extends Resource
 {
@@ -44,6 +43,7 @@ class UserResource extends Resource
                                 User::ROLE_IPL_ADMIN => 'IPL Property Owner (Master)',
                                 User::ROLE_DELIVERY_PARTNER => 'VRL Facility Manager',
                                 User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
+                                User::ROLE_AUXILIARY => 'Auxiliary Staff',
                                 User::ROLE_STAFF => 'Housekeeping / Ops Staff',
                                 User::ROLE_USER => 'Executive Guest',
                             ])
@@ -75,11 +75,11 @@ class UserResource extends Resource
                 Tables\Columns\ImageColumn::make('avatar_url')
                     ->label('')
                     ->circular()
-                    ->getStateUsing(fn ($record) => match(true) {
+                    ->getStateUsing(fn ($record) => match (true) {
                         empty($record->avatar_url) => null,
                         str_starts_with($record->avatar_url, 'http') => $record->avatar_url,
                         str_starts_with($record->avatar_url, '/storage/') => url($record->avatar_url),
-                        default => url('/storage/' . $record->avatar_url),
+                        default => url('/storage/'.$record->avatar_url),
                     }),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
@@ -94,6 +94,7 @@ class UserResource extends Resource
                         User::ROLE_IPL_ADMIN => 'IPL Owner',
                         User::ROLE_DELIVERY_PARTNER => 'VRL Manager',
                         User::ROLE_GUEST_RELATIONS => 'Front Desk',
+                        User::ROLE_AUXILIARY => 'Auxiliary Staff',
                         User::ROLE_STAFF => 'Housekeeping / Staff',
                         User::ROLE_USER, 'guest' => 'Guest',
                         default => ucfirst($state),
@@ -119,6 +120,7 @@ class UserResource extends Resource
                         User::ROLE_IPL_ADMIN => 'IPL Property Owner',
                         User::ROLE_DELIVERY_PARTNER => 'VRL Facility Manager',
                         User::ROLE_GUEST_RELATIONS => 'Front Desk / Guest Relations',
+                        User::ROLE_AUXILIARY => 'Auxiliary Staff',
                         User::ROLE_STAFF => 'Housekeeping / Ops Staff',
                         User::ROLE_USER => 'Executive Guest',
                     ]),
@@ -141,11 +143,11 @@ class UserResource extends Resource
                                     ->label('')
                                     ->circular()
                                     ->height(120)
-                                    ->state(fn ($record) => match(true) {
+                                    ->state(fn ($record) => match (true) {
                                         empty($record->avatar_url) => null,
                                         str_starts_with($record->avatar_url, 'http') => $record->avatar_url,
                                         str_starts_with($record->avatar_url, '/storage/') => url($record->avatar_url),
-                                        default => url('/storage/' . $record->avatar_url),
+                                        default => url('/storage/'.$record->avatar_url),
                                     }),
                                 Infolists\Components\Group::make([
                                     Infolists\Components\TextEntry::make('name')

@@ -4,15 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
-use App\Models\Order;
 use App\Models\FoodOrder;
-use App\Models\ServiceBooking;
+use App\Models\Order;
 use App\Models\PaymentAttempt;
+use App\Models\ServiceBooking;
 use App\Services\FlutterwaveService;
-use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -34,14 +33,14 @@ class PaymentController extends Controller
     {
         $validated = $request->validate([
             'order_type' => 'required|in:booking,order,food_order,service_booking',
-            'order_id'   => 'required|integer',
+            'order_id' => 'required|integer',
             'redirect_url' => 'nullable|string|max:2048',
         ]);
 
         $redirectBase = $validated['redirect_url'] ?? 'insignia://payment-complete';
         $webReturn = config('services.flutterwave.web_return_url');
         if ($redirectBase !== 'insignia://payment-complete'
-            && (!$webReturn || !str_starts_with($webReturn, 'https://') || $redirectBase !== $webReturn)) {
+            && (! $webReturn || ! str_starts_with($webReturn, 'https://') || $redirectBase !== $webReturn)) {
             return response()->json(['message' => 'Payment return URL is not configured for this app. Please contact support.'], 422);
         }
 
@@ -68,14 +67,14 @@ class PaymentController extends Controller
             case 'order':
                 $record = Order::with('product')->where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
                 $amount = $record->total_price;
-                $productName = "Insignia Boutique: " . ($record->product->name ?? 'Luxury Goods');
+                $productName = 'Insignia Boutique: '.($record->product->name ?? 'Luxury Goods');
                 $productDesc = "Delivery to {$record->delivery_location}";
                 break;
 
             case 'food_order':
                 $record = FoodOrder::where('id', $orderId)->where('user_id', $user->id)->firstOrFail();
                 $amount = $record->total_amount;
-                $productName = "Insignia Dining (" . ucfirst(str_replace('_', ' ', $record->type)) . ")";
+                $productName = 'Insignia Dining ('.ucfirst(str_replace('_', ' ', $record->type)).')';
                 $productDesc = "Order #{$record->id} dining service";
                 break;
 
@@ -93,25 +92,27 @@ class PaymentController extends Controller
             DB::transaction(function () use ($record) {
                 $room = \App\Models\Room::whereKey($record->room_id)->lockForUpdate()->firstOrFail();
                 $locked = Booking::whereKey($record->id)->lockForUpdate()->firstOrFail();
-                if (!$room->is_available || $room->status === 'maintenance' || $locked->paid_at
+                if (! $room->is_available || $room->status === 'maintenance' || $locked->paid_at
                     || $locked->status !== 'pending'
                     || ($locked->hold_expires_at && $locked->hold_expires_at->lte(now()))
                     || \App\Services\RoomAvailability::blocking($locked->check_in, $locked->check_out, $locked->id)->where('room_id', $room->id)->exists()) {
                     abort(409, 'This checkout is no longer available. Please check suite availability again.');
                 }
-                if (!$locked->hold_expires_at) $locked->update(['hold_expires_at' => now()->addMinutes(15)]);
+                if (! $locked->hold_expires_at) {
+                    $locked->update(['hold_expires_at' => now()->addMinutes(15)]);
+                }
             }, 3);
         }
 
         $prefix = strtoupper(substr($orderType, 0, 4));
-        $reference = "INS-FLW-{$prefix}-{$record->id}-" . Str::uuid();
+        $reference = "INS-FLW-{$prefix}-{$record->id}-".Str::uuid();
 
-        if (!empty($record->paid_at) || in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
+        if (! empty($record->paid_at) || in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
             return response()->json(['status' => 'error', 'message' => 'This transaction is no longer payable.'], 409);
         }
 
-        if ($record instanceof Order && !$record->stock_deducted
-            && (!$record->product || $record->product->stock < $record->quantity)) {
+        if ($record instanceof Order && ! $record->stock_deducted
+            && (! $record->product || $record->product->stock < $record->quantity)) {
             return response()->json(['status' => 'error', 'message' => 'This item is no longer available in the requested quantity.'], 409);
         }
 
@@ -134,39 +135,40 @@ class PaymentController extends Controller
 
         // Request payment link from Flutterwave
         $response = $this->flutterwaveService->createPaymentLink([
-            'reference'           => $reference,
-            'amount'              => $amount,
-            'product_name'        => $productName,
+            'reference' => $reference,
+            'amount' => $amount,
+            'product_name' => $productName,
             'product_description' => $productDesc,
-            'customer_name'       => $record instanceof Booking ? ($record->booking_contact['name'] ?? $user->name) : $user->name,
-            'user_phone'          => $record instanceof Booking ? ($record->booking_contact['phone'] ?? $user->phone) : $user->phone,
-            'user_email'          => $user->email,
-            'redirect_url'        => $redirectBase . (str_contains($redirectBase, '?') ? '&' : '?') . http_build_query([
+            'customer_name' => $record instanceof Booking ? ($record->booking_contact['name'] ?? $user->name) : $user->name,
+            'user_phone' => $record instanceof Booking ? ($record->booking_contact['phone'] ?? $user->phone) : $user->phone,
+            'user_email' => $user->email,
+            'redirect_url' => $redirectBase.(str_contains($redirectBase, '?') ? '&' : '?').http_build_query([
                 'reference' => $reference, 'order_type' => $orderType, 'order_id' => $orderId,
             ]),
-            'meta'                => [
+            'meta' => [
                 'order_type' => $orderType,
-                'order_id'   => $orderId,
-                'user_id'    => $user->id,
+                'order_id' => $orderId,
+                'user_id' => $user->id,
             ],
         ]);
 
-        if (!$response['success']) {
+        if (! $response['success']) {
             PaymentAttempt::where('reference', $reference)->update(['status' => 'initialization_failed']);
+
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => $response['message'] ?? 'Unable to initialize Flutterwave checkout.',
             ], 400);
         }
 
         return response()->json([
-            'status'      => 'success',
+            'status' => 'success',
             'payment_url' => $response['payment_url'],
             'cashier_url' => $response['payment_url'], // Backward compatibility with mobile clients
-            'reference'   => $reference,
-            'order_id'    => $record->id,
-            'order_type'  => $orderType,
-            'amount'      => $amount,
+            'reference' => $reference,
+            'order_id' => $record->id,
+            'order_type' => $orderType,
+            'amount' => $amount,
         ]);
     }
 
@@ -179,8 +181,9 @@ class PaymentController extends Controller
     {
         $signature = $request->header('verif-hash') ?? $request->header('Verif-Hash');
 
-        if (!$this->flutterwaveService->verifyWebhookSignature($signature)) {
+        if (! $this->flutterwaveService->verifyWebhookSignature($signature)) {
             Log::warning('Flutterwave webhook rejected: invalid secret hash.');
+
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
         }
 
@@ -218,7 +221,7 @@ class PaymentController extends Controller
     {
         $record = $this->findRecordByReference($reference);
 
-        if (!$record) {
+        if (! $record) {
             return response()->json(['status' => 'error', 'message' => 'Transaction not found.'], 404);
         }
 
@@ -228,11 +231,11 @@ class PaymentController extends Controller
 
         // If already confirmed in database
         $attempt = PaymentAttempt::where('reference', $reference)->first();
-        if ($attempt && $attempt->status === 'confirmed' && !empty($record->paid_at)) {
+        if ($attempt && $attempt->status === 'confirmed' && ! empty($record->paid_at)) {
             return response()->json([
-                'status'  => 'success',
+                'status' => 'success',
                 'is_paid' => true,
-                'record'  => $record,
+                'record' => $record,
             ]);
         }
 
@@ -245,16 +248,16 @@ class PaymentController extends Controller
             $record->refresh();
 
             return response()->json([
-                'status'  => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists() ? 'success' : 'pending',
+                'status' => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists() ? 'success' : 'pending',
                 'is_paid' => $confirmed || PaymentAttempt::where('reference', $reference)->where('status', 'confirmed')->exists(),
-                'record'  => $record,
+                'record' => $record,
             ]);
         }
 
         return response()->json([
-            'status'  => 'pending',
+            'status' => 'pending',
             'is_paid' => false,
-            'record'  => $record,
+            'record' => $record,
         ]);
     }
 
@@ -266,7 +269,7 @@ class PaymentController extends Controller
 
         $attempt = PaymentAttempt::where('reference', $reference)->where('gateway', 'flutterwave')->first();
         $data = $result['data'] ?? [];
-        if (!$attempt || ($data['tx_ref'] ?? null) !== $reference
+        if (! $attempt || ($data['tx_ref'] ?? null) !== $reference
             || strtoupper((string) ($data['currency'] ?? '')) !== $attempt->currency
             || empty($data['id'])) {
             return false;
@@ -285,19 +288,20 @@ class PaymentController extends Controller
      */
     protected function markOrderAsPaid(string $reference, ?string $externalId, string $gateway = 'flutterwave'): bool
     {
-        if ($gateway !== 'flutterwave' || !$externalId) {
+        if ($gateway !== 'flutterwave' || ! $externalId) {
             return false;
         }
 
         $notification = DB::transaction(function () use ($reference, $externalId) {
             $attempt = PaymentAttempt::where('reference', $reference)->first();
-            if (!$attempt || $attempt->gateway !== 'flutterwave') {
+            if (! $attempt || $attempt->gateway !== 'flutterwave') {
                 return null;
             }
 
             $model = $attempt->payable;
-            if (!$model) {
+            if (! $model) {
                 Log::error('Payment attempt payable missing', ['reference' => $reference]);
+
                 return null;
             }
 
@@ -319,6 +323,7 @@ class PaymentController extends Controller
             if ($attempt->provider_transaction_id
                 && $attempt->provider_transaction_id !== $externalId) {
                 $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_mismatch');
+
                 return null;
             }
 
@@ -326,29 +331,34 @@ class PaymentController extends Controller
             if (PaymentAttempt::where('provider_transaction_id', $externalId)
                 ->whereKeyNot($attempt->getKey())->exists()) {
                 $this->flagPaymentForReview($attempt, $externalId, 'transaction_id_reused');
+
                 return null;
             }
 
             $currentPrice = $record instanceof FoodOrder ? $record->total_amount : $record->total_price;
-            if (!is_numeric($currentPrice)
+            if (! is_numeric($currentPrice)
                 || (int) round(((float) $attempt->amount) * 100) !== (int) round(((float) $currentPrice) * 100)) {
                 $this->flagPaymentForReview($attempt, $externalId, 'payable_amount_changed');
+
                 return null;
             }
 
-            if (!empty($record->paid_at)) {
+            if (! empty($record->paid_at)) {
                 $this->flagPaymentForReview($attempt, $externalId, 'already_paid_other_attempt');
+
                 return null;
             }
 
             if (in_array($record->status, ['cancelled', 'refunded', 'completed', 'delivered'], true)) {
                 $this->flagPaymentForReview($attempt, $externalId, 'payable_inactive');
+
                 return null;
             }
 
             if ($record instanceof Booking) {
                 if ($record->hold_expires_at && $record->hold_expires_at->lte(now())) {
                     $this->flagPaymentForReview($attempt, $externalId, 'reservation_hold_expired');
+
                     return null;
                 }
                 $conflict = \App\Services\RoomAvailability::blocking($record->check_in, $record->check_out, $record->id)
@@ -356,14 +366,16 @@ class PaymentController extends Controller
 
                 if ($conflict) {
                     $this->flagPaymentForReview($attempt, $externalId, 'room_date_conflict');
+
                     return null;
                 }
             }
 
-            if ($record instanceof Order && !$record->stock_deducted) {
+            if ($record instanceof Order && ! $record->stock_deducted) {
                 $product = \App\Models\Product::whereKey($record->product_id)->first();
-                if (!$product || $product->stock < $record->quantity) {
+                if (! $product || $product->stock < $record->quantity) {
                     $this->flagPaymentForReview($attempt, $externalId, 'product_out_of_stock');
+
                     return null;
                 }
                 $product->decrement('stock', $record->quantity);
@@ -403,7 +415,7 @@ class PaymentController extends Controller
                 foreach ($recipients->unique('id') as $recipient) {
                     $recipient->notify(new \App\Notifications\PaymentActivityNotification(
                         'Verified suite booking',
-                        'Suite booking #' . $record->id . ' was paid and confirmed.',
+                        'Suite booking #'.$record->id.' was paid and confirmed.',
                         $record->id, 'confirmed'
                     ));
                 }
@@ -416,13 +428,11 @@ class PaymentController extends Controller
                     default => 'service_booking',
                 };
 
-                // Owner sees all verified income. Operations sees the relevant
-                // fulfillment request in its own database notification feed.
+                // IPL oversees verified income; Auxiliary handles fulfilment.
                 $recipients = \App\Models\User::whereIn('role', [
                     \App\Models\User::ROLE_ADMIN,
                     \App\Models\User::ROLE_IPL_ADMIN,
-                    \App\Models\User::ROLE_DELIVERY_PARTNER,
-                    \App\Models\User::ROLE_GUEST_RELATIONS,
+                    \App\Models\User::ROLE_AUXILIARY,
                 ])->get();
 
                 if ($record->user) {
@@ -444,7 +454,7 @@ class PaymentController extends Controller
             return ['user' => $record->user, 'title' => $title];
         }, 3);
 
-        if (!$notification) {
+        if (! $notification) {
             return false;
         }
 
@@ -456,7 +466,7 @@ class PaymentController extends Controller
     {
         // Keep the provider transaction evidence while withholding fulfillment.
         $changes = ['status' => 'needs_review'];
-        if (!$attempt->provider_transaction_id && !PaymentAttempt::where('provider_transaction_id', $externalId)->exists()) {
+        if (! $attempt->provider_transaction_id && ! PaymentAttempt::where('provider_transaction_id', $externalId)->exists()) {
             $changes['provider_transaction_id'] = $externalId;
         }
         $attempt->update($changes);
@@ -496,17 +506,16 @@ class PaymentController extends Controller
             ->orWhere('payment_reference', $reference)
             ->first()
             ?? Order::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first()
+                ->orWhere('opay_reference', $reference)
+                ->orWhere('payment_reference', $reference)
+                ->first()
             ?? FoodOrder::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first()
+                ->orWhere('opay_reference', $reference)
+                ->orWhere('payment_reference', $reference)
+                ->first()
             ?? ServiceBooking::where('flutterwave_reference', $reference)
-            ->orWhere('opay_reference', $reference)
-            ->orWhere('payment_reference', $reference)
-            ->first();
+                ->orWhere('opay_reference', $reference)
+                ->orWhere('payment_reference', $reference)
+                ->first();
     }
-
 }

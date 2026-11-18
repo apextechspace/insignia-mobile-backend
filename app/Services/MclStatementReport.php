@@ -19,7 +19,7 @@ class MclStatementReport
             ->where(fn ($query) => $query->where('status', 'confirmed')
                 ->orWhere(fn ($refund) => $refund->where('type', 'refund')->where('status', 'refunded')))
             ->orderBy('transaction_date')->orderBy('id')->get();
-        $expenses = Expense::where('status', 'approved')->where('currency', 'NGN')
+        $expenses = Expense::where('status', 'approved')->where('currency', 'NGN')->where('financial_stream', 'accommodation')
             ->where('expense_date', '>=', $start)->where('expense_date', '<', $end)
             ->orderBy('expense_date')->orderBy('id')->get();
         $float = PettyCashTransaction::where('transaction_date', '<', $end)->orderBy('transaction_date')->orderBy('id')->get();
@@ -61,6 +61,7 @@ class MclStatementReport
             if ($entry->transaction_date->lt($start)) {
                 $opening += $movement;
                 $floatTrend[$local->toDateString().' · Opening'] = $opening;
+
                 continue;
             }
             if ($entry->type === 'replenishment') {

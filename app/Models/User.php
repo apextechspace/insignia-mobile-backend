@@ -3,13 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-
 use Laravel\Sanctum\HasApiTokens;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -17,14 +16,35 @@ class User extends Authenticatable implements FilamentUser
     use HasApiTokens, HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
+
     public const ROLE_IPL_ADMIN = 'ipl_admin';
+
     public const ROLE_DELIVERY_PARTNER = 'delivery_partner';
+
     public const ROLE_GUEST_RELATIONS = 'guest_relations';
+
     public const ROLE_STAFF = 'staff';
+
     public const ROLE_USER = 'user';
+
+    public const ROLE_AUXILIARY = 'auxiliary';
+
+    public function notifications()
+    {
+        $query = $this->morphMany(\Illuminate\Notifications\DatabaseNotification::class, 'notifiable')->latest();
+        if (in_array($this->role, [self::ROLE_DELIVERY_PARTNER, self::ROLE_GUEST_RELATIONS, self::ROLE_STAFF], true)) {
+            $query->where(fn ($notifications) => $notifications->whereNull('data->type')
+                ->orWhere('data->type', '!=', 'verified_commerce_payment'));
+        }
+
+        return $query;
+    }
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if ($panel->getId() === 'auxiliary') {
+            return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_IPL_ADMIN, self::ROLE_AUXILIARY], true);
+        }
         if ($panel->getId() === 'admin') {
             // Door 1 (Owner's Portal): Only IPL Master Admins
             return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_IPL_ADMIN]);
@@ -95,7 +115,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function getHasSecurityPinAttribute(): bool
     {
-        return !is_null($this->security_pin);
+        return ! is_null($this->security_pin);
     }
 
     /**

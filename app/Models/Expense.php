@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Expense extends Model
 {
+    protected $attributes = ['financial_stream' => 'accommodation'];
+
     public const APPROVAL_THRESHOLD = 50000.00; // Naira threshold where partner expense requires IPL approval
 
     protected $fillable = [
         'title',
+        'financial_stream',
         'category',
         'amount',
         'currency',

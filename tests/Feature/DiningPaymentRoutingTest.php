@@ -14,13 +14,15 @@ class DiningPaymentRoutingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_paid_dining_order_notifies_guest_owner_and_operations_only_once(): void
+    public function test_paid_dining_order_notifies_guest_owner_and_auxiliary_only_once(): void
     {
         \Illuminate\Support\Facades\Queue::fake();
         config(['services.flutterwave.secret_hash' => 'routing-secret']);
         $guest = User::factory()->create(['role' => User::ROLE_USER, 'expo_push_token' => 'ExponentPushToken[guest]']);
         $owner = User::factory()->create(['role' => User::ROLE_IPL_ADMIN, 'expo_push_token' => 'ExponentPushToken[owner]']);
-        $operations = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER, 'expo_push_token' => 'ExponentPushToken[operations]']);
+        $operations = User::factory()->create(['role' => User::ROLE_AUXILIARY, 'expo_push_token' => 'ExponentPushToken[auxiliary]']);
+        $manager = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]);
+        $frontDesk = User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS]);
         $ref = 'INS-FLW-DINING-TEST-1';
 
         $order = FoodOrder::create([
@@ -67,6 +69,9 @@ class DiningPaymentRoutingTest extends TestCase
         ])->assertOk();
 
         $this->assertSame('paid', $order->fresh()->status);
+        foreach ([$manager, $frontDesk] as $excluded) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $excluded->id, 'notifiable_type' => User::class]);
+        }
         $this->assertNotNull($order->fresh()->paid_at);
         \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\DeliverPaymentPush::class, 3);
         \Illuminate\Support\Facades\Queue::assertPushed(\Illuminate\Notifications\SendQueuedNotifications::class, function ($job) use ($guest) {

@@ -14,6 +14,10 @@ class CreateDailyReconciliation extends CreateRecord
     {
         $data['submitted_by'] = Auth::id();
         $data['status'] = 'submitted';
+        if (! Auth::user()?->isIplAdmin()) {
+            $data['recorded_ancillary_cash'] = 0;
+        }
+
         return $data;
     }
 }

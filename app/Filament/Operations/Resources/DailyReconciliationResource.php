@@ -9,8 +9,8 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,10 +19,24 @@ class DailyReconciliationResource extends Resource
     protected static ?string $model = DailyReconciliation::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calculator';
+
     protected static ?string $navigationLabel = 'Daily Reconciliation';
+
     protected static ?string $modelLabel = 'Reconciliation';
+
     protected static ?string $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 3;
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = parent::getEloquentQuery();
+        if (! Auth::user()?->isIplAdmin()) {
+            $query->where('submitted_by', Auth::id())->where('recorded_ancillary_cash', 0);
+        }
+
+        return $query;
+    }
 
     public static function form(Form $form): Form
     {
@@ -39,7 +53,7 @@ class DailyReconciliationResource extends Resource
                             ->options([
                                 'morning' => '🌅 Morning Shift',
                                 'evening' => '🌆 Evening Shift',
-                                'night'   => '🌙 Night Shift',
+                                'night' => '🌙 Night Shift',
                             ])
                             ->default('morning')
                             ->required()
@@ -54,6 +68,8 @@ class DailyReconciliationResource extends Resource
                             ->prefix('₦')
                             ->default(0),
                         Forms\Components\TextInput::make('recorded_ancillary_cash')
+                            ->visible(fn () => Auth::user()?->isIplAdmin())
+                            ->dehydrated(fn () => Auth::user()?->isIplAdmin())
                             ->label('Ancillary Non-App Collections (₦)')
                             ->numeric()
                             ->prefix('₦')
@@ -68,8 +84,7 @@ class DailyReconciliationResource extends Resource
                             ->prefix('₦')
                             ->default(0)
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn(Forms\Set $set, Forms\Get $get) =>
-                                $set('discrepancy', (float)$get('recorded_accommodation') + (float)$get('recorded_ancillary_cash') - (float)$get('actual_pos_total') - (float)$get('actual_transfer_total') - (float)$get('actual_cash_counted'))
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => $set('discrepancy', (float) $get('recorded_accommodation') + (float) $get('recorded_ancillary_cash') - (float) $get('actual_pos_total') - (float) $get('actual_transfer_total') - (float) $get('actual_cash_counted'))
                             ),
                         Forms\Components\TextInput::make('actual_transfer_total')
                             ->label('Bank Transfer Total (₦)')
@@ -77,8 +92,7 @@ class DailyReconciliationResource extends Resource
                             ->prefix('₦')
                             ->default(0)
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn(Forms\Set $set, Forms\Get $get) =>
-                                $set('discrepancy', (float)$get('recorded_accommodation') + (float)$get('recorded_ancillary_cash') - (float)$get('actual_pos_total') - (float)$get('actual_transfer_total') - (float)$get('actual_cash_counted'))
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => $set('discrepancy', (float) $get('recorded_accommodation') + (float) $get('recorded_ancillary_cash') - (float) $get('actual_pos_total') - (float) $get('actual_transfer_total') - (float) $get('actual_cash_counted'))
                             ),
                         Forms\Components\TextInput::make('actual_cash_counted')
                             ->label('Physical Cash (₦)')
@@ -87,8 +101,7 @@ class DailyReconciliationResource extends Resource
                             ->default(0)
                             ->helperText('Cashless Policy: Property operates on zero-cash policy (Default ₦0)')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn(Forms\Set $set, Forms\Get $get) =>
-                                $set('discrepancy', (float)$get('recorded_accommodation') + (float)$get('recorded_ancillary_cash') - (float)$get('actual_pos_total') - (float)$get('actual_transfer_total') - (float)$get('actual_cash_counted'))
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => $set('discrepancy', (float) $get('recorded_accommodation') + (float) $get('recorded_ancillary_cash') - (float) $get('actual_pos_total') - (float) $get('actual_transfer_total') - (float) $get('actual_cash_counted'))
                             ),
                         Forms\Components\TextInput::make('discrepancy')
                             ->label('Discrepancy (₦)')
@@ -117,9 +130,10 @@ class DailyReconciliationResource extends Resource
         return $table
             ->modifyQueryUsing(function (Builder $query): Builder {
                 $user = Auth::user();
-                if (!$user?->isIplAdmin()) {
+                if (! $user?->isIplAdmin()) {
                     $query->where('submitted_by', $user->id);
                 }
+
                 return $query;
             })
             ->columns([
@@ -129,9 +143,9 @@ class DailyReconciliationResource extends Resource
                     ->sortable(),
                 Tables\Columns\BadgeColumn::make('shift')
                     ->label('Shift')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
                         'morning' => '🌅 Morning', 'evening' => '🌆 Evening', 'night' => '🌙 Night',
-                        default   => ucfirst($state),
+                        default => ucfirst($state),
                     }),
                 Tables\Columns\TextColumn::make('recorded_accommodation')
                     ->label('Accommodation (₦)')
@@ -145,20 +159,19 @@ class DailyReconciliationResource extends Resource
                 Tables\Columns\TextColumn::make('discrepancy')
                     ->label('Discrepancy (₦)')
                     ->money('NGN')
-                    ->color(fn(DailyReconciliation $record): string =>
-                        abs((float) $record->discrepancy) < 0.01 ? 'success' : 'danger'
+                    ->color(fn (DailyReconciliation $record): string => abs((float) $record->discrepancy) < 0.01 ? 'success' : 'danger'
                     )
                     ->weight('bold'),
                 Tables\Columns\BadgeColumn::make('status')
                     ->label('Status')
                     ->colors([
-                        'gray'    => 'submitted',
+                        'gray' => 'submitted',
                         'warning' => 'verified_by_mcl',
                         'success' => 'approved_by_ipl',
                     ]),
                 Tables\Columns\TextColumn::make('submittedBy.name')
                     ->label('Submitted By')
-                    ->visible(fn(): bool => Auth::user()?->isIplAdmin()),
+                    ->visible(fn (): bool => Auth::user()?->isIplAdmin()),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Submitted')
                     ->since(),
@@ -169,20 +182,18 @@ class DailyReconciliationResource extends Resource
                     ->label('Approve')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->visible(fn(DailyReconciliation $record): bool =>
-                        Auth::user()?->isIplAdmin() && $record->status !== 'approved_by_ipl'
+                    ->visible(fn (DailyReconciliation $record): bool => Auth::user()?->isIplAdmin() && $record->status !== 'approved_by_ipl'
                     )
                     ->requiresConfirmation()
                     ->action(function (DailyReconciliation $record): void {
                         $record->update([
-                            'status'      => 'approved_by_ipl',
+                            'status' => 'approved_by_ipl',
                             'verified_by' => Auth::id(),
                             'verified_at' => now(),
                         ]);
                     }),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn(DailyReconciliation $record): bool =>
-                        $record->status === 'submitted' && $record->submitted_by === Auth::id()
+                    ->visible(fn (DailyReconciliation $record): bool => $record->status === 'submitted' && $record->submitted_by === Auth::id()
                     ),
                 Tables\Actions\ViewAction::make(),
             ]);
@@ -191,10 +202,10 @@ class DailyReconciliationResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListDailyReconciliations::route('/'),
+            'index' => Pages\ListDailyReconciliations::route('/'),
             'create' => Pages\CreateDailyReconciliation::route('/create'),
-            'edit'   => Pages\EditDailyReconciliation::route('/{record}/edit'),
-            'view'   => Pages\ViewDailyReconciliation::route('/{record}'),
+            'edit' => Pages\EditDailyReconciliation::route('/{record}/edit'),
+            'view' => Pages\ViewDailyReconciliation::route('/{record}'),
         ];
     }
 
@@ -204,11 +215,15 @@ class DailyReconciliationResource extends Resource
             && (int) $record->submitted_by === (int) Auth::id();
     }
 
-    public static function canDelete($record): bool { return false; }
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
 
     public static function canViewAny(): bool
     {
         $user = Auth::user();
+
         return $user && in_array($user->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN,
             User::ROLE_DELIVERY_PARTNER, User::ROLE_GUEST_RELATIONS,
