@@ -172,14 +172,25 @@ class RoomResource extends Resource
                         ->icon('heroicon-m-banknotes')
                         ->schema([
                             Forms\Components\TextInput::make('price_per_night')
-                                ->label('Nightly Rate (NGN)')
+                                ->label('Final Nightly Price (NGN)')
                                 ->required()
                                 ->numeric()
                                 ->minValue(0)
                                 ->step(0.01)
                                 ->prefix('₦')
                                 ->placeholder('150000')
-                                ->helperText('Standard rack rate per night in Nigerian Naira.'),
+                                ->helperText('Guests pay exactly this amount per night. Include VAT and any discount yourself; the system adds or deducts nothing.'),
+                            Forms\Components\Toggle::make('discount_enabled')
+                                ->label('Show discount offer')->default(false)->live()
+                                ->helperText('Displays an offer badge only. Turning this off does not change the price above.'),
+                            Forms\Components\TextInput::make('discount_percentage')->label('Discount shown (%)')
+                                ->numeric()->minValue(0.01)->maxValue(99.99)->step(0.01)->suffix('%')
+                                ->required(fn (Forms\Get $get) => (bool) $get('discount_enabled'))
+                                ->visible(fn (Forms\Get $get) => (bool) $get('discount_enabled'))
+                                ->helperText('Enter the percentage already reflected in the final nightly price. It is not deducted again.'),
+                            Forms\Components\TextInput::make('discount_label')->label('Offer name (optional)')
+                                ->placeholder('Ramadan Offer')->maxLength(100)
+                                ->visible(fn (Forms\Get $get) => (bool) $get('discount_enabled')),
                             Forms\Components\Toggle::make('is_available')
                                 ->label('Published on Booking Engine')
                                 ->helperText('When enabled, guests can view and reserve this suite on the web portal and mobile app.')

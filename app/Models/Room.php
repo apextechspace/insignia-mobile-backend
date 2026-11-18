@@ -10,6 +10,14 @@ class Room extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Room $room): void {
+            if ($room->discount_enabled && (! $room->exists || $room->isDirty(['discount_enabled', 'discount_percentage', 'discount_label']))) {
+                \Illuminate\Support\Facades\Validator::make($room->getAttributes(), [
+                    'discount_percentage' => 'required|numeric|min:0.01|max:99.99',
+                    'discount_label' => 'nullable|string|max:100',
+                ])->validate();
+            }
+        });
         static::updating(function (Room $room): void {
             if (! $room->isDirty('status') || $room->status !== 'available') {
                 return;
@@ -47,6 +55,9 @@ class Room extends Model
         'type',
         'description',
         'price_per_night',
+        'discount_enabled',
+        'discount_percentage',
+        'discount_label',
         'tag',
         'category_description',
         'amenities',
@@ -58,6 +69,8 @@ class Room extends Model
     ];
 
     protected $casts = [
+        'discount_enabled' => 'boolean',
+        'discount_percentage' => 'decimal:2',
         'amenities' => 'array',
         'images' => 'array',
         'is_available' => 'boolean',
