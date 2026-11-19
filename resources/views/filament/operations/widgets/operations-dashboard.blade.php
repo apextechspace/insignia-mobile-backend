@@ -1,6 +1,6 @@
-<x-filament-widgets::widget>
+<x-filament-widgets::widget class="min-w-0">
     @if (auth()->user()?->isStaff())
-        <div class="space-y-6">
+        <div class="min-w-0 space-y-6">
             <x-filament::section>
                 <x-slot name="heading">My Tasks</x-slot>
                 <ul class="space-y-3">
@@ -46,30 +46,51 @@
     @elseif (auth()->user()?->isGuestRelations())
         @include('filament.operations.widgets.front-desk-dashboard')
     @else
-    <div class="space-y-6">
+    <div class="min-w-0 space-y-6">
         @if (auth()->user()?->isDeliveryPartner())
             <x-filament::section>
                 <x-slot name="heading">Manager Review Queue</x-slot>
-                <p><a href="{{ \App\Filament\Operations\Resources\PettyCashResource::getUrl(panel: 'operations') }}">Operating Float: ₦{{ number_format($imprestBalance, 2) }}</a></p>
-                <p><a href="{{ \App\Filament\Operations\Resources\MonthlyStatementResource::getUrl(panel: 'operations') }}">Open Monthly Statements</a></p>
-                <p class="mt-4 font-semibold">Cleaning awaiting verification</p>
+                <x-slot name="description">Review room readiness, urgent issues and accommodation finance.</x-slot>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                        <p class="text-sm text-gray-600 dark:text-gray-300">Operating Float</p>
+                        <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">₦{{ number_format($imprestBalance, 2) }}</p>
+                        <div class="mt-3"><x-filament::button tag="a" size="sm" :href="\App\Filament\Operations\Resources\PettyCashResource::getUrl(panel: 'operations')">Review Operating Float</x-filament::button></div>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                        <p class="text-sm text-gray-600 dark:text-gray-300">Accommodation Statements</p>
+                        <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">Reconcile receipts, expenses and the operating float before submission.</p>
+                        <div class="mt-3"><x-filament::button tag="a" size="sm" :href="\App\Filament\Operations\Resources\MonthlyStatementResource::getUrl(panel: 'operations')">Open Monthly Statements</x-filament::button></div>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                <h2 class="font-semibold text-gray-900 dark:text-white">Cleaning Awaiting Verification</h2>
+                <div class="mt-3 space-y-3">
                 @forelse ($cleaningReviews as $task)
-                    <p><a href="{{ \App\Filament\Operations\Resources\StaffTaskResource::getUrl('edit', ['record' => $task], panel: 'operations') }}">{{ $task->location_name }} · {{ $task->task_title }}</a></p>
+                    <p><a class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400" href="{{ \App\Filament\Operations\Resources\StaffTaskResource::getUrl('edit', ['record' => $task], panel: 'operations') }}">{{ $task->location_name }} · {{ $task->task_title }}</a></p>
                 @empty
-                    <p>No completed cleaning to review.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No completed cleaning to review.</p>
                 @endforelse
-                <p class="mt-4 font-semibold">Maintenance rooms with upcoming arrivals</p>
-                @forelse ($upcomingReservations->filter(fn ($stay) => $stay->room?->status === 'maintenance') as $stay)
-                    <p><a href="{{ \App\Filament\Operations\Resources\GuestStayResource::getUrl('view', ['record' => $stay], panel: 'operations') }}">{{ $stay->room->name }} · Arrival {{ $stay->check_in }}</a></p>
+                </div></div>
+                <div class="rounded-xl border border-amber-200 p-4 dark:border-amber-800">
+                <h2 class="font-semibold text-gray-900 dark:text-white">Maintenance Arrival Alerts</h2>
+                <div class="mt-3 space-y-3">
+                @forelse ($maintenanceArrivals as $stay)
+                    <p><a class="text-sm font-medium text-amber-700 hover:underline dark:text-amber-300" href="{{ \App\Filament\Operations\Resources\GuestStayResource::getUrl('view', ['record' => $stay], panel: 'operations') }}">{{ $stay->room->name }} · Arrival {{ $stay->check_in }}</a></p>
                 @empty
-                    <p>No upcoming arrivals shown for maintenance rooms.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No upcoming arrivals shown for maintenance rooms.</p>
                 @endforelse
-                <p class="mt-4 font-semibold">Urgent incidents</p>
+                </div></div>
+                <div class="rounded-xl border border-rose-200 p-4 dark:border-rose-800">
+                <h2 class="font-semibold text-gray-900 dark:text-white">Urgent Incidents</h2>
+                <div class="mt-3 space-y-3">
                 @forelse ($urgentIncidents as $issue)
-                    <p><a href="{{ \App\Filament\Operations\Resources\IncidentResource::getUrl('edit', ['record' => $issue], panel: 'operations') }}">{{ $issue->title }}</a></p>
+                    <p><a class="text-sm font-medium text-rose-700 hover:underline dark:text-rose-300" href="{{ \App\Filament\Operations\Resources\IncidentResource::getUrl('edit', ['record' => $issue], panel: 'operations') }}">{{ $issue->title }}</a></p>
                 @empty
-                    <p>No open high or critical incidents.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No open high or critical incidents.</p>
                 @endforelse
+                </div></div></div>
             </x-filament::section>
         @endif
         {{-- ============================================================ --}}
@@ -82,7 +103,7 @@
 
             <div class="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 mb-2">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
                         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md text-[#E5C07B] border border-[#E5C07B]/30 tracking-wider uppercase">
                             ✨ Insignia Court · Abuja
                         </span>
@@ -139,7 +160,7 @@
             $totalRooms = $rooms->count();
             $occupancyPercentage = $totalRooms > 0 ? round(($occupiedCount / $totalRooms) * 100) : 0;
         @endphp
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {{-- 1. Occupancy Card --}}
             <div class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center justify-between">
@@ -234,7 +255,7 @@
                         <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
                             <div class="min-w-0">
                                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
-                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->booking_contact['name'] ?? $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
                             </div>
                             <span class="text-xs text-amber-600 font-semibold whitespace-nowrap">Pending review</span>
                         </div>
@@ -245,13 +266,13 @@
             </section>
             <section class="rounded-2xl p-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
                 <h2 class="font-bold text-lg text-gray-900 dark:text-white">Upcoming Confirmed Stays ({{ $upcomingReservations->count() }})</h2>
-                <p class="text-xs text-gray-500 mt-1">Paid reservations that require upcoming front-desk preparation.</p>
+                <p class="text-xs text-gray-500 mt-1">Confirmed reservations, including verified deposits, that require front-desk preparation.</p>
                 <div class="mt-4 space-y-3">
                     @forelse($upcomingReservations as $booking)
                         <div class="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-2">
                             <div class="min-w-0">
                                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ $booking->id }} · {{ $booking->room?->name ?? 'Suite' }}</p>
-                                <p class="text-xs text-gray-500">{{ $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
+                                <p class="text-xs text-gray-500">{{ $booking->booking_contact['name'] ?? $booking->user?->name ?? 'Guest' }} · {{ $booking->check_in }} to {{ $booking->check_out }}</p>
                             </div>
                             <span class="text-xs text-emerald-600 font-semibold whitespace-nowrap">Confirmed</span>
                         </div>

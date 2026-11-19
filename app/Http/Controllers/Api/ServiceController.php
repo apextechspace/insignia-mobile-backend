@@ -17,7 +17,8 @@ class ServiceController extends Controller
             $query->where('category', $category);
         }
 
-        return response()->json($query->get());
+        return response()->json($query->get()->map(fn (Service $service) => $service->setAttribute('inquiry_url',
+            'https://wa.me/'.preg_replace('/\D/', '', config('property.whatsapp_number')))));
     }
 
     public function show($id)

@@ -1,5 +1,7 @@
 # Namecheap backend dashboard assets
 
+Current `feature/guest-booking` audit release: see `LAUNCH_AUDIT_2026_11_19.md`. Use that branch when deploying the current ZIP; the older branch command below describes the original release only. The rebuilt stylesheet includes the manager review cards, narrow-screen layout and portal dark-mode utilities.
+
 `insignia-portal-assets.zip` contains the verified Vite output for the backend, including the custom Filament dashboard stylesheet and build manifest. It does not contain PHP dependencies, environment files, uploaded media or application credentials. Filament's own published assets are installed separately by Composer's upgrade script.
 
 From the Laravel project root on Namecheap:

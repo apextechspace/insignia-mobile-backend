@@ -39,23 +39,28 @@ class BookingResource extends Resource
                     ->searchable()
                     ->preload(),
                 Forms\Components\Select::make('room_id')
-                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
+                    ->live()
+                    ->disabled(fn (?Booking $record) => $record !== null)
                     ->relationship('room', 'name')
                     ->required()
                     ->searchable()
                     ->preload(),
                 Forms\Components\DatePicker::make('check_in')
-                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
+                    ->live()->minDate(fn (string $operation) => $operation === 'create' ? today(config('property.timezone')) : null)
+                    ->disabled(fn (?Booking $record) => $record !== null)
                     ->required(),
                 Forms\Components\DatePicker::make('check_out')
-                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
+                    ->live()
+                    ->disabled(fn (?Booking $record) => $record !== null)
                     ->required()
-                    ->afterOrEqual('check_in'),
-                Forms\Components\TextInput::make('total_price')
-                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
-                    ->required()
-                    ->numeric()
-                    ->prefix('₦'),
+                    ->after('check_in'),
+                Forms\Components\Placeholder::make('quoted_total')->label('Agreed Total (NGN)')
+                    ->content(function (Forms\Get $get, ?Booking $record): string {
+                        if ($record) return '₦'.number_format((float) $record->total_price, 2);
+                        $room = \App\Models\Room::find($get('room_id'));
+                        if (!$room || !$get('check_in') || !$get('check_out') || $get('check_out') <= $get('check_in')) return 'Select a room and valid dates.';
+                        return '₦'.number_format((float) \App\Services\RoomAvailability::quote($room, $get('check_in'), $get('check_out')), 2);
+                    }),
                 Forms\Components\Select::make('status')
                     ->options([
                         'pending' => 'Pending',

@@ -43,6 +43,7 @@ class OperationsPanelProvider extends PanelProvider
                 ),
             )
             ->sidebarCollapsibleOnDesktop()
+            ->databaseNotifications()
             ->colors([
                 'primary' => [
                     50  => '252, 245, 248',

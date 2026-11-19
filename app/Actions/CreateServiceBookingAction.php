@@ -28,6 +28,9 @@ class CreateServiceBookingAction
 
         // 2. Determine Price
         $totalPrice = $variant ? $variant->price : ($service->price ?? 0);
+        if ((float) $totalPrice <= 0) {
+            throw ValidationException::withMessages(['service_id' => 'This service requires a quotation. Contact Guest Relations before making payment.']);
+        }
 
         // 3. Prepare Metadata based on Type
         $metadata = $this->prepareMetadata($service, $data);

@@ -13,6 +13,10 @@ Route::get('/', function () {
             return redirect('/admin');
         }
 
+        if ($user->role === \App\Models\User::ROLE_AUXILIARY) {
+            return redirect('/auxiliary');
+        }
+
         return redirect('/operations');
     }
 

@@ -79,12 +79,18 @@ class OperationsDashboardWidget extends Widget
             ->orderBy('check_in')
             ->limit(12)->get();
 
-        $upcomingReservations = Booking::with(['room', 'user'])
+        $upcomingQuery = Booking::with(['room', 'user'])
             ->whereIn('status', ['confirmed', 'paid'])
-            ->whereNotNull('paid_at')
+            ->where(fn ($query) => $query->whereNotNull('paid_at')->orWhereExists(
+                fn ($receipts) => $receipts->selectRaw('1')->from('assisted_reservation_payments')
+                    ->whereColumn('assisted_reservation_payments.booking_id', 'bookings.id')->whereNotNull('verified_at')
+            ))
             ->whereDate('check_in', '>=', $propertyDate)
-            ->orderBy('check_in')
-            ->limit(12)->get();
+            ->whereNull('checked_in_at')->whereNull('checked_out_at')
+            ->orderBy('check_in')->orderBy('id');
+        $upcomingReservations = (clone $upcomingQuery)->limit(12)->get();
+        $maintenanceArrivals = (clone $upcomingQuery)->whereHas('room', fn ($query) => $query->where('status', 'maintenance'))
+            ->limit(6)->get();
 
         $openIncidents = Incident::whereNotIn('status', ['resolved', 'closed'])->count();
         $pendingTasks = StaffTask::whereIn('status', ['pending', 'in_progress'])->count();
@@ -110,6 +116,7 @@ class OperationsDashboardWidget extends Widget
             'user' => $user,
             'pendingReservations' => $pendingReservations,
             'upcomingReservations' => $upcomingReservations,
+            'maintenanceArrivals' => $maintenanceArrivals,
         ];
     }
 }

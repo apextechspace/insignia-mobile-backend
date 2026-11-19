@@ -13,7 +13,7 @@ class InventoryController extends Controller
     {
         abort_unless(in_array($request->user()->role, [
             User::ROLE_ADMIN, User::ROLE_IPL_ADMIN, User::ROLE_DELIVERY_PARTNER,
-            User::ROLE_GUEST_RELATIONS, User::ROLE_STAFF,
+            User::ROLE_GUEST_RELATIONS,
         ], true), 403);
 
         return response()->json(ConsumableItem::orderBy('category')->orderBy('name')->get()->map(

@@ -14,6 +14,15 @@ class ServiceBookingPaymentMethodTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_quote_only_service_cannot_create_a_zero_value_checkout(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $service = Service::create(['name' => 'Custom refurbishment', 'category' => 'Property', 'type' => 'request', 'price' => 0, 'is_active' => true, 'requires_variant' => false]);
+        $this->getJson('/api/services-public')->assertOk()->assertJsonPath('0.inquiry_url', 'https://wa.me/'.preg_replace('/\D/', '', config('property.whatsapp_number')));
+        $this->postJson('/api/service-bookings', ['service_id' => $service->id])->assertUnprocessable()->assertJsonValidationErrors('service_id');
+        $this->assertDatabaseCount('service_bookings', 0);
+    }
+
     public function test_service_booking_defaults_to_flutterwave_when_no_receipt_provided(): void
     {
         $user = User::factory()->create();

@@ -186,7 +186,8 @@ class LaunchWorkflowRegressionTest extends TestCase
             'current_stock' => 2, 'minimum_alert_level' => 3, 'unit_cost' => 1500,
         ]);
         $this->actingAs(User::factory()->create(['role' => User::ROLE_USER]))->getJson('/api/inventory')->assertForbidden();
-        $this->actingAs(User::factory()->create(['role' => User::ROLE_STAFF]))->getJson('/api/inventory')
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_STAFF]))->getJson('/api/inventory')->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]))->getJson('/api/inventory')
             ->assertOk()->assertJsonPath('0.id', $item->id)->assertJsonPath('0.current_stock', 2)
             ->assertJsonPath('0.is_low_stock', true)->assertJsonMissingPath('0.unit_cost');
     }

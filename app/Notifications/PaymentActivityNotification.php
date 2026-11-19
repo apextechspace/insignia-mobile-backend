@@ -28,4 +28,9 @@ class PaymentActivityNotification extends Notification
             'status' => $this->status,
         ];
     }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return \App\Support\PortalNotificationData::format($this->toArray($notifiable));
+    }
 }

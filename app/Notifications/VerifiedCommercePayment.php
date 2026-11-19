@@ -33,4 +33,9 @@ class VerifiedCommercePayment extends Notification
             'status' => 'confirmed',
         ];
     }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return \App\Support\PortalNotificationData::format($this->toArray($notifiable));
+    }
 }
