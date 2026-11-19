@@ -52,6 +52,7 @@
             {{ $statement['from'] }} through {{ $statement['to'] }}. Running figures start at zero for the selected period/filter—not the actual opening bank balance.
             Monthly VRL settlements and petty cash transfers are excluded to avoid double-counting internal movements. Approved expenses are operational records and may not have cleared the bank.
             Refund ledger entries must be reconciled against actual provider/bank evidence separately.
+            Verified assisted deposits and balances are listed on their verification dates without counting the final booking total again. Transaction times use Nigeria time.
         </p>
         <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <table class="min-w-full divide-y divide-gray-200 text-left text-sm dark:divide-gray-800">

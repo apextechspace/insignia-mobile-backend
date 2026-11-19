@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class AccommodationLedger extends Model
 {
+    public function scopeWithoutAssistedRevenue(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $query->where(fn ($q) => $q->where('type', '!=', 'revenue')->orWhereNotExists(
+            fn ($payments) => $payments->selectRaw('1')->from('assisted_reservation_payments')
+                ->whereColumn('assisted_reservation_payments.booking_id', 'accommodation_ledgers.booking_id')->whereNotNull('verified_at')
+        ));
+    }
+
     protected $fillable = [
         'booking_id',
         'room_id',
@@ -32,7 +40,7 @@ class AccommodationLedger extends Model
     {
         static::creating(function (AccommodationLedger $ledger) {
             if (empty($ledger->reference)) {
-                $ledger->reference = 'ACL-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5));
+                $ledger->reference = 'ACL-'.date('Ymd').'-'.strtoupper(\Illuminate\Support\Str::random(5));
             }
         });
     }

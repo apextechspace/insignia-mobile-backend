@@ -5,23 +5,38 @@ namespace App\Filament\Pages;
 use App\Models\ManualBankAccount;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ManualBankSettings extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-building-library';
+
     protected static ?string $navigationLabel = 'Bank Transfer & Deposit Settings';
+
     protected static ?string $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 2;
+
     protected static string $view = 'filament.pages.manual-bank-settings';
 
     public string $bankName = '';
+
     public string $accountNumber = '';
+
     public string $accountName = '';
+
     public bool $active = false;
+
     public bool $depositsEnabled = false;
+
     public string $minimumDeposit = '50';
+
     public bool $vrlCanVerifyPos = false;
+
+    public string $depositMode = 'percentage';
+
+    public bool $cancellationTermsEnabled = false;
+
+    public bool $lateBookingGraceEnabled = false;
 
     public static function canAccess(): bool
     {
@@ -35,6 +50,9 @@ class ManualBankSettings extends Page
         $this->depositsEnabled = (bool) $policy->deposits_enabled;
         $this->minimumDeposit = (string) $policy->minimum_percent;
         $this->vrlCanVerifyPos = (bool) $policy->vrl_can_verify_pos;
+        $this->depositMode = $policy->deposit_mode;
+        $this->cancellationTermsEnabled = (bool) $policy->cancellation_terms_enabled;
+        $this->lateBookingGraceEnabled = (bool) $policy->late_booking_grace_enabled;
         $account = ManualBankAccount::current() ?: ManualBankAccount::query()->latest('id')->first();
         if ($account) {
             $this->bankName = $account->bank_name;
@@ -50,11 +68,17 @@ class ManualBankSettings extends Page
         $data = $this->validate([
             'depositsEnabled' => ['boolean'],
             'vrlCanVerifyPos' => ['boolean'],
-            'minimumDeposit' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:100'],
+            'depositMode' => ['required', 'in:percentage,night_based'],
+            'cancellationTermsEnabled' => ['boolean'],
+            'lateBookingGraceEnabled' => ['boolean'],
+            'minimumDeposit' => ['exclude_unless:depositMode,percentage', 'required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:100'],
         ]);
         DB::table('reservation_payment_policy')->where('id', 1)->update([
             'deposits_enabled' => $data['depositsEnabled'],
-            'minimum_percent' => $data['minimumDeposit'],
+            'minimum_percent' => $data['minimumDeposit'] ?? DB::table('reservation_payment_policy')->where('id', 1)->value('minimum_percent'),
+            'deposit_mode' => $data['depositMode'],
+            'cancellation_terms_enabled' => $data['cancellationTermsEnabled'],
+            'late_booking_grace_enabled' => $data['lateBookingGraceEnabled'],
             'vrl_can_verify_pos' => $data['vrlCanVerifyPos'],
         ]);
         \Filament\Notifications\Notification::make()->success()->title('Deposit policy saved')->send();

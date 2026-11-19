@@ -15,10 +15,11 @@ class MclStatementReport
         $local = Carbon::create((int) $statement->year, (int) $statement->month, 1, 0, 0, 0, config('property.timezone'));
         $start = $local->copy()->utc();
         $end = $local->copy()->addMonth()->utc();
-        $ledger = AccommodationLedger::where('transaction_date', '>=', $start)->where('transaction_date', '<', $end)
+        $ledger = AccommodationLedger::withoutAssistedRevenue()->where('transaction_date', '>=', $start)->where('transaction_date', '<', $end)
             ->where(fn ($query) => $query->where('status', 'confirmed')
                 ->orWhere(fn ($refund) => $refund->where('type', 'refund')->where('status', 'refunded')))
             ->orderBy('transaction_date')->orderBy('id')->get();
+        $ledger = $ledger->concat(AssistedReceiptRows::between($start, $end))->sortBy('transaction_date');
         $expenses = Expense::where('status', 'approved')->where('currency', 'NGN')->where('financial_stream', 'accommodation')
             ->where('expense_date', '>=', $start)->where('expense_date', '<', $end)
             ->orderBy('expense_date')->orderBy('id')->get();

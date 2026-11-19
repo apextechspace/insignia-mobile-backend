@@ -39,16 +39,20 @@ class BookingResource extends Resource
                     ->searchable()
                     ->preload(),
                 Forms\Components\Select::make('room_id')
+                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
                     ->relationship('room', 'name')
                     ->required()
                     ->searchable()
                     ->preload(),
                 Forms\Components\DatePicker::make('check_in')
+                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
                     ->required(),
                 Forms\Components\DatePicker::make('check_out')
+                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
                     ->required()
                     ->afterOrEqual('check_in'),
                 Forms\Components\TextInput::make('total_price')
+                    ->disabled(fn (?Booking $record) => $record?->reservation_terms !== null)
                     ->required()
                     ->numeric()
                     ->prefix('₦'),

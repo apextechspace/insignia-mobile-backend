@@ -12,6 +12,7 @@ class CustomerPaymentEmail extends Notification implements ShouldQueue
     use Queueable;
 
     public int $tries = 3;
+
     public array $backoff = [30, 120];
 
     public function __construct(public array $details)
@@ -28,8 +29,8 @@ class CustomerPaymentEmail extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject($this->details['title'] . ' | Insignia Courts')
-            ->view('emails.customer-payment', [
+            ->subject($this->details['subject'] ?? $this->details['title'].' | Insignia Courts')
+            ->view(! empty($this->details['reservation_email']) ? 'emails.reservation-confirmation' : 'emails.customer-payment', [
                 'details' => $this->details,
                 'customerName' => $this->details['customer_name'] ?? $notifiable->name ?? 'Guest',
             ]);

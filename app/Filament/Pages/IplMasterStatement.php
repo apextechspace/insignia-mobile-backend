@@ -22,8 +22,8 @@ class IplMasterStatement extends Page
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
-        $this->fromDate = now()->startOfMonth()->toDateString();
-        $this->toDate = now()->toDateString();
+        $this->fromDate = now(config('property.timezone'))->startOfMonth()->toDateString();
+        $this->toDate = now(config('property.timezone'))->toDateString();
     }
 
     public static function canAccess(): bool

@@ -13,10 +13,13 @@ class AssistedReservationPayments
 {
     public const METHODS = ['pos' => 'POS', 'bank_transfer' => 'Direct bank transfer'];
 
-    public static function minimum(string $total): int
+    public static function minimum(string $total, int $nights = 1): int
     {
         $policy = DB::table('reservation_payment_policy')->find(1);
         $kobo = self::kobo($total);
+        if ($policy->deposits_enabled && $policy->deposit_mode === 'night_based') {
+            return min($kobo, (int) ceil($kobo * ($nights >= 7 ? 3 : 1) / max(1, $nights)));
+        }
         $rate = $policy->deposits_enabled ? self::kobo($policy->minimum_percent) : 10000;
 
         return intdiv($kobo * $rate + 9999, 10000);
@@ -101,24 +104,7 @@ class AssistedReservationPayments
                     $stay->payment_method = $methods->count() === 1 ? $methods->first() : 'mixed';
                 }
                 $stay->save();
-                $email = $stay->booking_contact['email'] ?? null;
-                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    \Illuminate\Support\Facades\Notification::route('mail', $email)->notify(new \App\Notifications\CustomerPaymentEmail([
-                        'title' => 'Payment receipt',
-                        'receipt' => true,
-                        'number' => 'Booking-'.$stay->id,
-                        'customer_name' => $stay->booking_contact['name'] ?? 'Guest',
-                        'description' => $room->name,
-                        'amount' => number_format($payment->amount_kobo / 100, 2),
-                        'balance_due' => number_format(($total - $verified) / 100, 2),
-                        'reservation_status' => $stay->status === 'confirmed' ? 'Dates secured' : 'Dates not yet secured',
-                        'reference' => $payment->reference,
-                        'method' => self::METHODS[$payment->method],
-                        'date' => $payment->transaction_date,
-                        'check_in' => $stay->check_in,
-                        'check_out' => $stay->check_out,
-                    ]));
-                }
+                ReservationConfirmationEmail::sendAssisted($stay, $payment);
             }, 3);
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages(['payment_id' => 'This bank transaction reference has already been credited.']);
@@ -150,6 +136,13 @@ class AssistedReservationPayments
                 'deposit_exception_reason' => trim($reason),
                 'deposit_exception_at' => now(),
             ])->save();
+            $last = self::entries($stay)->whereNotNull('verified_at')->latest('id')->first();
+            if ($last) {
+                // A confirmation after an owner exception is not a second receipt.
+                $notice = clone $last;
+                $notice->amount_kobo = 0;
+                ReservationConfirmationEmail::sendAssisted($stay, $notice, true);
+            }
         }, 3);
     }
 

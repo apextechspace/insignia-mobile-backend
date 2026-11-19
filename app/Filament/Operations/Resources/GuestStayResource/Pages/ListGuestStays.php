@@ -5,8 +5,8 @@ namespace App\Filament\Operations\Resources\GuestStayResource\Pages;
 use App\Filament\Operations\Resources\GuestStayResource;
 use App\Models\Booking;
 use App\Models\Room;
-use App\Services\RoomAvailability;
 use App\Services\AssistedReservationPayments;
+use App\Services\RoomAvailability;
 use Filament\Actions\Action;
 use Filament\Forms\Components;
 use Filament\Forms\Get;
@@ -45,7 +45,9 @@ class ListGuestStays extends ListRecords
                                 return 'Select a suite and dates to see the total.';
                             }
 
-                            return '₦'.number_format((float) RoomAvailability::quote($room, $arrival, $departure), 2);
+                            $total = RoomAvailability::quote($room, $arrival, $departure);
+
+                            return '₦'.number_format((float) $total, 2).' · '.\App\Services\ReservationTerms::summary(\App\Services\ReservationTerms::snapshot($arrival, $departure, $total, true));
                         }),
                     Components\Select::make('guests')->options([1 => '1 guest', 2 => '2 guests'])->default(1)->required(),
                     Components\TextInput::make('guest_name')->label('Lead guest name')->required()->maxLength(255),
@@ -69,7 +71,7 @@ class ListGuestStays extends ListRecords
                                 'check_out' => $data['check_out'],
                                 'guests' => $data['guests'],
                                 'total_price' => $total,
-                                'minimum_payment_kobo' => AssistedReservationPayments::minimum($total),
+                                'minimum_payment_kobo' => AssistedReservationPayments::minimum($total, (int) (new \DateTimeImmutable($data['check_in']))->diff(new \DateTimeImmutable($data['check_out']))->days),
                                 'status' => 'pending',
                                 'hold_expires_at' => now()->addMinutes(15),
                                 'booking_contact' => [

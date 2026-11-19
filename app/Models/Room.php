@@ -56,6 +56,7 @@ class Room extends Model
         'description',
         'price_per_night',
         'discount_enabled',
+        'show_vat_included',
         'discount_percentage',
         'discount_label',
         'tag',
@@ -70,6 +71,7 @@ class Room extends Model
 
     protected $casts = [
         'discount_enabled' => 'boolean',
+        'show_vat_included' => 'boolean',
         'discount_percentage' => 'decimal:2',
         'amenities' => 'array',
         'images' => 'array',

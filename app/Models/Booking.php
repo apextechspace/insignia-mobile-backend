@@ -6,6 +6,24 @@ use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
+    protected static function booted(): void
+    {
+        static::creating(function (Booking $stay): void {
+            if ($stay->check_in && $stay->check_out && $stay->check_out > $stay->check_in) {
+                $stay->reservation_terms = \App\Services\ReservationTerms::snapshot($stay->check_in, $stay->check_out, (string) $stay->total_price,
+                    $stay->reserved_by !== null || $stay->minimum_payment_kobo !== null, $stay->minimum_payment_kobo);
+                if ($stay->reserved_by !== null && $stay->minimum_payment_kobo === null) {
+                    $stay->minimum_payment_kobo = $stay->reservation_terms['minimum_kobo'];
+                }
+            }
+        });
+        static::updating(function (Booking $stay): void {
+            if ($stay->getOriginal('reservation_terms') !== null && $stay->isDirty(['reservation_terms', 'room_id', 'check_in', 'check_out', 'total_price'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['reservation_terms' => 'Agreed reservation terms cannot be overwritten.']);
+            }
+        });
+    }
+
     public function scopeActionablePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
     {
         return $query->where('status', 'pending')->where(fn ($q) => $q->whereNull('hold_expires_at')->orWhere('hold_expires_at', '>', now()));
@@ -16,6 +34,7 @@ class Booking extends Model
     protected array $paidDetailFields = ['user_id', 'room_id', 'check_in', 'check_out', 'total_price'];
 
     protected $casts = [
+        'reservation_terms' => 'array',
         'total_price' => 'decimal:2',
         'hold_expires_at' => 'datetime',
         'booking_contact' => 'array',

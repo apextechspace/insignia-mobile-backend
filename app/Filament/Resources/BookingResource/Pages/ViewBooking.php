@@ -56,19 +56,22 @@ class ViewBooking extends ViewRecord
                                 Infolists\Components\TextEntry::make('nights')
                                     ->label('Duration')
                                     ->state(fn ($record) => $record->check_in && $record->check_out
-                                        ? \Carbon\Carbon::parse($record->check_in)->diffInDays(\Carbon\Carbon::parse($record->check_out)) . ' nights'
+                                        ? \Carbon\Carbon::parse($record->check_in)->diffInDays(\Carbon\Carbon::parse($record->check_out)).' nights'
                                         : '-'),
                                 Infolists\Components\TextEntry::make('total_price')
                                     ->label('Total Charged')
                                     ->money('NGN')
                                     ->weight(FontWeight::Bold),
+                                Infolists\Components\TextEntry::make('reservation_terms_summary')->label('Agreed reservation terms')
+                                    ->state(fn ($record) => $record->reservation_terms ? \App\Services\ReservationTerms::summary($record->reservation_terms) : 'Legacy reservation — retain previously agreed terms.')
+                                    ->columnSpanFull(),
                             ]),
                     ]),
 
                 Infolists\Components\Section::make('Payment Details')
-                    ->description(fn ($record) => 'Lead guest: ' . ($record->booking_contact['name'] ?? $record->user?->name ?? 'Not provided')
-                        . ' · Phone: ' . ($record->booking_contact['phone'] ?? $record->user?->phone ?? 'Not provided')
-                        . ' · Guests: ' . $record->guests . ' · Requests: ' . ($record->special_requests ?: 'None'))
+                    ->description(fn ($record) => 'Lead guest: '.($record->booking_contact['name'] ?? $record->user?->name ?? 'Not provided')
+                        .' · Phone: '.($record->booking_contact['phone'] ?? $record->user?->phone ?? 'Not provided')
+                        .' · Guests: '.$record->guests.' · Requests: '.($record->special_requests ?: 'None'))
                     ->schema([
                         Infolists\Components\Grid::make(2)
                             ->schema([
@@ -84,7 +87,7 @@ class ViewBooking extends ViewRecord
                             ->label('Payment Proof')
                             ->disk('public')
                             ->height(300)
-                            ->visible(fn ($record) => !empty($record->receipt_url)),
+                            ->visible(fn ($record) => ! empty($record->receipt_url)),
                     ]),
             ]);
     }

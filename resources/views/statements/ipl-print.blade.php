@@ -84,6 +84,7 @@
     <footer class="note">
         <p>Recorded operating activity, not a bank statement or confirmation of refund payout. Running figures start at zero for this period and department; they are not an opening or closing bank balance.</p>
         <p>Monthly VRL settlements and operating float transfers are excluded to avoid counting internal movements twice. Approved expenses may not have cleared the bank. Reconcile recorded refunds against provider or bank evidence.</p>
+        <p>Verified assisted deposits and balances appear on their verification dates; the final booking total is not counted again. Transaction times use Nigeria time.</p>
     </footer>
 </main>
 </body>

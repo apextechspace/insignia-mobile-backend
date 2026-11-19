@@ -168,6 +168,9 @@ class GuestStayResource extends Resource
                 TextEntry::make('special_requests')->label('Booking requests')->placeholder('None')->columnSpanFull(),
             ])->columns(3),
             Section::make('Payment verification')->schema([
+                TextEntry::make('agreed_terms')->label('Agreed reservation terms')
+                    ->state(fn (Booking $record) => $record->reservation_terms ? \App\Services\ReservationTerms::summary($record->reservation_terms) : 'Legacy reservation — retain previously agreed terms.')
+                    ->columnSpanFull(),
                 TextEntry::make('total_price')->label('Reservation total')->money('NGN'),
                 TextEntry::make('payment_verification')->label('Payment')->state(fn (Booking $record) => $record->paid_at ? 'Verified paid' : 'Not verified')->badge(),
                 TextEntry::make('payment_method')->label('Method')->placeholder('Not provided'),

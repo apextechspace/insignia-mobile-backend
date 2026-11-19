@@ -16,12 +16,13 @@ Meeting: 3:30 PM, Africa/Lagos, 19 November 2026.
 - Booking card capitalisation, Night/Nights, bracketed stay length, Select Room / Select Suite.
 - Auxiliary order handling and role separation (live acceptance remains necessary).
 
-## Outstanding policy and implementation decisions
+## Follow-up release - implemented; activation and live acceptance required
 
-- Night-based assisted deposits: first night for 1-6 nights, first three nights for 7+ nights. Existing implementation uses an owner-set percentage. Online Flutterwave remains full payment unless explicitly changed.
-- Three guest confirmation email variants aligned with verified deposit/full-payment status.
-- Cancellation deadlines, refundable amounts, late-booking grace period, and room-release process: previously paused; no automatic refunds or room release currently approved.
-- Optional VAT-inclusive label: not implemented; owner enters final VAT-inclusive prices manually.
-- Financial coverage review: the existing master report records accommodation from the paid-booking ledger; verified assisted part-payments before full settlement require a separate reporting check. Printing fixes do not change that recognition logic.
+- Owner-selectable night-based assisted deposits, alongside the existing percentage option. Online Flutterwave remains full payment.
+- Short/extended-stay deposit confirmations and full-payment emails, only after verification, with current payment and total-paid/balance figures.
+- Saved cancellation terms, local deadlines, capped cancellation charges and refundable amounts. Optional late-booking grace period is separately controlled. Defaults do not retroactively apply a policy to existing reservations.
+- Owner-controlled VAT-inclusive label, without tax calculations or price changes.
+- Verified assisted receipts included once in both IPL and newly generated VRL statements, including cross-month deposits and balances. Previously approved snapshots remain historical records.
+- Automatic refund payouts and automatic room release remain outside the authorised scope; management handles those manually.
 
-Do not publish refund promises or change active payment rules while only fixing statement printing.
+See RESERVATION_POLICY_HANDOVER.md for exact owner settings, scope, and the live test checklist. Production SMTP, queue delivery, and actual gateway/bank payments still require the live acceptance steps.

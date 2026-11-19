@@ -8,7 +8,6 @@ use App\Models\FoodOrder;
 use App\Models\Order;
 use App\Models\ServiceBooking;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class IplFinancialStatement
@@ -22,18 +21,20 @@ class IplFinancialStatement
     public function report(string $from, string $to, string $source = 'all'): array
     {
         try {
-            $start = CarbonImmutable::createFromFormat('!Y-m-d', $from);
-            $end = CarbonImmutable::createFromFormat('!Y-m-d', $to);
+            $start = CarbonImmutable::createFromFormat('!Y-m-d', $from, config('property.timezone'));
+            $end = CarbonImmutable::createFromFormat('!Y-m-d', $to, config('property.timezone'));
         } catch (\Throwable $e) {
             throw ValidationException::withMessages(['dates' => 'Use valid YYYY-MM-DD dates.']);
         }
 
-        if (!$start || !$end || $start->format('Y-m-d') !== $from
+        if (! $start || ! $end || $start->format('Y-m-d') !== $from
             || $end->format('Y-m-d') !== $to || $start->greaterThan($end)
-            || $start->diffInDays($end) > 366 || !in_array($source, self::SOURCES, true)) {
+            || $start->diffInDays($end) > 366 || ! in_array($source, self::SOURCES, true)) {
             throw ValidationException::withMessages(['dates' => 'Choose a valid date range of 367 days or fewer and a supported source.']);
         }
 
+        $start = $start->startOfDay()->utc();
+        $exclusiveEnd = $end->addDay()->startOfDay()->utc();
         $rows = collect();
         $append = function (string $sourceName, string $type, int $id, $date, $amount, string $reference, string $method, string $detail) use ($rows, $source): void {
             if ($source !== 'all' && $sourceName !== $source) {
@@ -44,8 +45,8 @@ class IplFinancialStatement
                 return;
             }
             $rows->push([
-                'key' => $sourceName . ':' . $type . ':' . $id,
-                'date' => CarbonImmutable::parse($date)->format('Y-m-d H:i:s'),
+                'key' => $sourceName.':'.$type.':'.$id,
+                'date' => CarbonImmutable::parse($date)->timezone(config('property.timezone'))->format('Y-m-d H:i:s'),
                 'source' => $sourceName,
                 'type' => $type,
                 'reference' => $reference,
@@ -59,14 +60,14 @@ class IplFinancialStatement
         // by Booking as well. An unledgered booking is a reconciliation exception.
         if ($source === 'all' || $source === 'accommodation') {
             AccommodationLedger::query()
-                ->with('booking')
+                ->with('booking')->withoutAssistedRevenue()
                 ->whereIn('type', ['revenue', 'refund'])
                 ->whereIn('status', ['confirmed', 'refunded'])
-                ->whereBetween('transaction_date', [$start->startOfDay(), $end->endOfDay()])
+                ->where('transaction_date', '>=', $start)->where('transaction_date', '<', $exclusiveEnd)
                 ->orderBy('id')->chunk(200, function ($entries) use ($append): void {
                     foreach ($entries as $entry) {
                         if ($entry->type === 'revenue'
-                            && (!$entry->booking || !$entry->booking->paid_at)) {
+                            && (! $entry->booking || ! $entry->booking->paid_at)) {
                             continue;
                         }
                         // Refund rows are included only when the refund ledger
@@ -74,7 +75,7 @@ class IplFinancialStatement
                         // The statement still requires external evidence review.
                         if ($entry->type === 'refund' && (
                             $entry->status !== 'refunded'
-                            || !$entry->booking
+                            || ! $entry->booking
                             || $entry->booking->status !== 'refunded'
                         )) {
                             continue;
@@ -82,9 +83,14 @@ class IplFinancialStatement
                         $append('accommodation', $entry->type, $entry->id,
                             $entry->transaction_date, $entry->gross_amount,
                             $entry->reference, $entry->payment_method ?? 'unknown',
-                            'Suite booking #' . ($entry->booking_id ?? 'manual'));
+                            'Suite booking #'.($entry->booking_id ?? 'manual'));
                     }
                 });
+            foreach (AssistedReceiptRows::between($start, $exclusiveEnd) as $payment) {
+                $append('accommodation', 'payment', $payment->id, $payment->transaction_date,
+                    $payment->gross_amount, $payment->reference, $payment->payment_method,
+                    'Verified accommodation payment for booking #'.$payment->booking_id);
+            }
         }
 
         foreach ([
@@ -96,25 +102,25 @@ class IplFinancialStatement
                 continue;
             }
             $model::query()->whereNotNull('paid_at')
-                ->whereBetween('paid_at', [$start->startOfDay(), $end->endOfDay()])
+                ->where('paid_at', '>=', $start)->where('paid_at', '<', $exclusiveEnd)
                 ->orderBy('id')->chunk(200, function ($payments) use ($append, $category, $field): void {
                     foreach ($payments as $payment) {
                         $append($category, 'income', $payment->id, $payment->paid_at,
                             $payment->{$field}, $payment->flutterwave_reference
-                                ?: ($payment->payment_reference ?: strtoupper($category) . '-' . $payment->id),
+                                ?: ($payment->payment_reference ?: strtoupper($category).'-'.$payment->id),
                             $payment->payment_method ?? 'unknown',
-                            ucfirst($category) . ' #' . $payment->id);
+                            ucfirst($category).' #'.$payment->id);
                     }
                 });
         }
 
         if ($source === 'all' || $source === 'expense') {
             Expense::query()->where('status', 'approved')
-                ->whereBetween('expense_date', [$start->startOfDay(), $end->endOfDay()])
+                ->where('expense_date', '>=', $start)->where('expense_date', '<', $exclusiveEnd)
                 ->orderBy('id')->chunk(200, function ($expenses) use ($append): void {
                     foreach ($expenses as $expense) {
                         $append('expense', 'expense', $expense->id, $expense->expense_date,
-                            $expense->amount, 'EXP-' . $expense->id,
+                            $expense->amount, 'EXP-'.$expense->id,
                             $expense->payment_method ?? 'unknown', $expense->title);
                     }
                 });
@@ -125,6 +131,7 @@ class IplFinancialStatement
         $rows = $rows->map(function ($row) use (&$balance) {
             $balance += $row['amount_cents'];
             $row['running_cents'] = $balance;
+
             return $row;
         });
 

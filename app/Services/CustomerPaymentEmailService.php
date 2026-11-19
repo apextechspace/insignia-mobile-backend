@@ -13,7 +13,15 @@ class CustomerPaymentEmailService
     public function send(Model $record, bool $receipt = true, ?string $reference = null): void
     {
         // Receipt delivery is only entered by verified settlement workflows.
-        if (!$record->user || ($receipt && !$record->paid_at)) {
+        if (! $record->user || ($receipt && ! $record->paid_at)) {
+            return;
+        }
+        if ($record instanceof Booking && $receipt) {
+            $record->user->notify(new CustomerPaymentEmail(ReservationConfirmationEmail::details($record,
+                AssistedReservationPayments::kobo($record->total_price), AssistedReservationPayments::kobo($record->total_price),
+                $reference ?: ($record->flutterwave_reference ?: $record->payment_reference ?: 'Booking-'.$record->id),
+                ucwords(str_replace('_', ' ', $record->payment_method ?: 'flutterwave')), (string) $record->paid_at)));
+
             return;
         }
 
@@ -26,10 +34,10 @@ class CustomerPaymentEmailService
         $record->user->notify(new CustomerPaymentEmail([
             'title' => $receipt ? 'Payment receipt' : 'Room booking received',
             'receipt' => $receipt,
-            'number' => class_basename($record) . '-' . $record->getKey(),
+            'number' => class_basename($record).'-'.$record->getKey(),
             'description' => $description,
             'amount' => number_format((float) ($record instanceof FoodOrder ? $record->total_amount : $record->total_price), 2),
-            'reference' => $reference ?: ($record->flutterwave_reference ?: ($record->payment_reference ?: class_basename($record) . '-' . $record->getKey())),
+            'reference' => $reference ?: ($record->flutterwave_reference ?: ($record->payment_reference ?: class_basename($record).'-'.$record->getKey())),
             'method' => $record->payment_method ? ucwords(str_replace('_', ' ', $record->payment_method)) : 'Awaiting payment',
             'date' => $receipt ? (string) $record->paid_at : (string) $record->created_at,
             'check_in' => $record instanceof Booking ? $record->check_in : null,

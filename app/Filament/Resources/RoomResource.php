@@ -183,6 +183,8 @@ class RoomResource extends Resource
                             Forms\Components\Toggle::make('discount_enabled')
                                 ->label('Show discount offer')->default(false)->live()
                                 ->helperText('Displays an offer badge only. Turning this off does not change the price above.'),
+                            Forms\Components\Toggle::make('show_vat_included')->label('Show “Includes 7.5% VAT”')->default(false)
+                                ->helperText('Enable only when the final price above already includes VAT. This label does not calculate or add tax.'),
                             Forms\Components\TextInput::make('discount_percentage')->label('Discount shown (%)')
                                 ->numeric()->minValue(0.01)->maxValue(99.99)->step(0.01)->suffix('%')
                                 ->required(fn (Forms\Get $get) => (bool) $get('discount_enabled'))

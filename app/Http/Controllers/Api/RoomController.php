@@ -16,15 +16,18 @@ class RoomController extends Controller
             'guests' => 'nullable|integer|min:1|max:2',
         ]);
         $rooms = Room::where('is_available', true)->where('status', '!=', 'maintenance');
-        if (!empty($dates['check_in'])) {
+        if (! empty($dates['check_in'])) {
             $rooms->whereNotIn('id', \App\Services\RoomAvailability::blocking($dates['check_in'], $dates['check_out'])->select('room_id'));
         }
+
         return response()->json($rooms->get()->map(function ($room) use ($dates) {
-            if (!empty($dates['check_in'])) {
+            if (! empty($dates['check_in'])) {
                 $nights = (new \DateTimeImmutable($dates['check_in']))->diff(new \DateTimeImmutable($dates['check_out']))->days;
                 $room->setAttribute('stay_total', round($nights * $room->price_per_night, 2));
+                $room->setAttribute('reservation_terms_preview', \App\Services\ReservationTerms::snapshot($dates['check_in'], $dates['check_out'], (string) $room->stay_total, false));
                 $room->setAttribute('nights', $nights);
             }
+
             return $room;
         }));
     }
@@ -32,6 +35,7 @@ class RoomController extends Controller
     public function show(Room $room)
     {
         abort_unless($room->is_available && $room->status !== 'maintenance', 404);
+
         return response()->json($room);
     }
 }

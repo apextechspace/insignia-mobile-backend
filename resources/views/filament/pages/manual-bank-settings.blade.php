@@ -31,12 +31,32 @@
             <h2 class="text-lg font-semibold">Front Desk and VRL deposit policy</h2>
             <p>Applies to new staff reservations. Full verified payment is due before check-in.</p>
             <label class="block"><input type="checkbox" wire:model="depositsEnabled"> Allow deposits to secure room dates</label>
+            <div class="space-y-2">
+                <label for="deposit-mode">Staff reservation deposit rule</label>
+                <x-filament::input.wrapper>
+                    <x-filament::input.select id="deposit-mode" wire:model.live="depositMode">
+                        <option value="percentage">Percentage of the total stay</option>
+                        <option value="night_based">First night (1–6 nights); first three nights (7+ nights)</option>
+                    </x-filament::input.select>
+                </x-filament::input.wrapper>
+                <p>Applies to new staff reservations only. Online Flutterwave bookings still require full payment. Existing reservations retain their agreed minimum.</p>
+            </div>
+            @if ($depositMode === 'percentage')
             <div class="space-y-2" style="max-width: 20rem">
                 <label for="minimum-deposit" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Minimum deposit (%)</label>
                 <x-filament::input.wrapper suffix="%" :valid="! $errors->has('minimumDeposit')">
                     <x-filament::input id="minimum-deposit" type="number" step="0.01" min="0.01" max="100" wire:model="minimumDeposit" required />
                 </x-filament::input.wrapper>
             </div>
+            @else
+                <p>A one-night stay requires full payment. Stays of two to six nights require the first night; stays of seven nights or more require the first three nights. Final room prices are used without adding VAT again.</p>
+            @endif
+            <h3 class="font-semibold">Cancellation Terms — All New Room Reservations</h3>
+            <p>These terms apply to new online and staff-assisted bookings when enabled. They do not enable online instalments or change existing reservations.</p>
+            <label class="block"><input type="checkbox" wire:model="cancellationTermsEnabled"> Apply the cancellation terms below to new reservations and confirmation emails</label>
+            <p>1–6 nights: full refund for cancellation at least 48 hours before check-in; otherwise retain the first night. 7+ nights: full refund at least seven days before check-in; otherwise retain the first three nights, limited to money received. Refunds and room release are handled manually by management.</p>
+            <label class="block"><input type="checkbox" wire:model="lateBookingGraceEnabled"> Extended stays booked within seven days of arrival: allow cancellation until the earlier of 24 hours after booking or scheduled check-in</label>
+            <p>Check-in: 2:00 PM; check-out: noon, Nigeria time. Extended-stay no-show room release is a management review from noon the following day, never an automatic action. Confirm these business terms before enabling them.</p>
             <label class="block"><input type="checkbox" wire:model="vrlCanVerifyPos"> Allow VRL managers to verify assisted POS and bank transfer payments</label>
             <p>Managers must match the amount and reference against the POS merchant record or actual bank credit. IPL still handles deposit exceptions.</p>
             @error('minimumDeposit') <p>{{ $message }}</p> @enderror
