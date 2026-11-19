@@ -1,7 +1,10 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/admin/ipl-statement-print', \App\Http\Controllers\IplStatementPrintController::class)
+    ->name('ipl-statement.print');
 
 Route::get('/', function () {
     if (Auth::check()) {
@@ -9,6 +12,7 @@ Route::get('/', function () {
         if ($user->role === 'ipl_admin' || $user->role === 'admin') {
             return redirect('/admin');
         }
+
         return redirect('/operations');
     }
 

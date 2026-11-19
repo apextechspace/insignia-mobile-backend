@@ -30,7 +30,7 @@
             </label>
             <div class="flex items-end gap-2">
                 <button wire:click="exportCsv" type="button" class="rounded-lg bg-[#4A0E2E] px-4 py-2 text-sm font-semibold text-white hover:bg-[#692447]">Export CSV</button>
-                <button type="button" onclick="window.print()" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100">Print / PDF</button>
+                <a href="{{ route('ipl-statement.print', ['from' => $statement['from'], 'to' => $statement['to'], 'source' => $statement['source']]) }}" target="_blank" rel="noopener" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 dark:text-gray-100">Print / PDF</a>
             </div>
         </div>
         @php($money = fn (int $cents) => '₦' . number_format($cents / 100, 2))
