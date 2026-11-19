@@ -31,7 +31,12 @@
             <h2 class="text-lg font-semibold">Front Desk and VRL deposit policy</h2>
             <p>Applies to new staff reservations. Full verified payment is due before check-in.</p>
             <label class="block"><input type="checkbox" wire:model="depositsEnabled"> Allow deposits to secure room dates</label>
-            <label class="block">Minimum deposit (%) <input type="number" step="0.01" min="0.01" max="100" wire:model="minimumDeposit" required></label>
+            <div class="space-y-2" style="max-width: 20rem">
+                <label for="minimum-deposit" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Minimum deposit (%)</label>
+                <x-filament::input.wrapper suffix="%" :valid="! $errors->has('minimumDeposit')">
+                    <x-filament::input id="minimum-deposit" type="number" step="0.01" min="0.01" max="100" wire:model="minimumDeposit" required />
+                </x-filament::input.wrapper>
+            </div>
             <label class="block"><input type="checkbox" wire:model="vrlCanVerifyPos"> Allow VRL managers to verify assisted POS and bank transfer payments</label>
             <p>Managers must match the amount and reference against the POS merchant record or actual bank credit. IPL still handles deposit exceptions.</p>
             @error('minimumDeposit') <p>{{ $message }}</p> @enderror
