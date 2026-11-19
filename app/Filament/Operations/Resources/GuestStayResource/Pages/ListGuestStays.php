@@ -64,7 +64,7 @@ class ListGuestStays extends ListRecords
                             $room = RoomAvailability::lockAvailableRoom((int) $data['room_id'], $data['check_in'], $data['check_out']);
                             $total = RoomAvailability::quote($room, $data['check_in'], $data['check_out']);
 
-                            return Booking::create([
+                            $booking = Booking::create([
                                 'reserved_by' => $staff->id,
                                 'room_id' => $room->id,
                                 'check_in' => $data['check_in'],
@@ -81,6 +81,8 @@ class ListGuestStays extends ListRecords
                                 ],
                                 'special_requests' => $data['special_requests'] ?? null,
                             ]);
+                            \App\Services\ReservationGuestCommunication::sendUpdate($booking, 'held');
+                            return $booking;
                         }, 3);
                     } catch (ValidationException $exception) {
                         Notification::make()->danger()->title($exception->getMessage())->send();

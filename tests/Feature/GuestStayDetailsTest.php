@@ -52,7 +52,7 @@ class GuestStayDetailsTest extends TestCase
         $booking = $this->booking();
         Livewire::test(ViewGuestStay::class, ['record' => $booking->id])
             ->assertSuccessful()->assertSee('Booking Contact')->assertSee('Arrival Suite')
-            ->assertSee('Verified paid')->assertSee('TEST-ARRIVAL-42')->assertSee('Awaiting arrival')
+            ->assertSee('Paid in full · Verified')->assertSee('TEST-ARRIVAL-42')->assertSee('Awaiting arrival')
             ->assertActionVisible('check_in')->assertActionHidden('check_out');
     }
 

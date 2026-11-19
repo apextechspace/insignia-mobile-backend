@@ -62,6 +62,7 @@ class StayOperationsService
                 'guest_registration' => $registration,
             ])->save();
             $room->update(['status' => 'occupied']);
+            ReservationGuestCommunication::sendUpdate($stay, 'checked_in');
         }, 3);
     }
 
@@ -88,6 +89,7 @@ class StayOperationsService
             // Generate a new checklist for every real guest departure.
             // This happens in the same transaction as check-out.
             app(RoomTurnoverService::class)->createForCheckout($room);
+            ReservationGuestCommunication::sendUpdate($stay, 'checked_out');
         }, 3);
     }
 }

@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/admin/ipl-statement-print', \App\Http\Controllers\IplStatementPrintController::class)
     ->name('ipl-statement.print');
 
+Route::get('/operations/accommodation-statement-print', \App\Http\Controllers\AccommodationStatementPrintController::class)
+    ->name('accommodation-statement.print');
+
 Route::get('/', function () {
     if (Auth::check()) {
         $user = Auth::user();

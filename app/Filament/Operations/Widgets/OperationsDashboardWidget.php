@@ -98,6 +98,7 @@ class OperationsDashboardWidget extends Widget
         return [
             'propertyNow' => $propertyNow,
             'imprestBalance' => \App\Models\PettyCashTransaction::latest('id')->value('balance_after') ?? 0,
+            'monthRoomReceipts' => app(\App\Services\IplFinancialStatement::class)->report($propertyNow->copy()->startOfMonth()->toDateString(), $propertyDate, 'accommodation')['inflow_cents'],
             'cleaningReviews' => StaffTask::with(['room', 'propertyArea'])
                 ->where('status', 'completed')
                 ->where(fn ($query) => $query->where('task_type', 'room_turnaround')->orWhereNotNull('property_area_id'))

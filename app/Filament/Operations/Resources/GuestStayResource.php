@@ -57,7 +57,7 @@ class GuestStayResource extends Resource
         if (!$record->paid_at && $record->status === 'cancelled') return 'Cancelled';
         if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return $record->reserved_by ? 'Hold expired' : 'Checkout expired';
         if ($record->reserved_by && !$record->paid_at && $record->status === 'pending') {
-            return \App\Services\AssistedReservationPayments::entries($record)->whereNull('verified_at')->exists()
+            return \App\Services\AssistedReservationPayments::pending($record)->exists()
                 ? 'Payment under review' : 'Temporary hold';
         }
         if (($record->reserved_by || $record->minimum_payment_kobo !== null) && !$record->paid_at && $record->status === 'confirmed') return 'Reserved · Deposit verified';
@@ -148,13 +148,15 @@ class GuestStayResource extends Resource
                                 'reference' => $payment->reference,
                                 'method' => \App\Services\AssistedReservationPayments::METHODS[$payment->method],
                                 'amount' => $payment->amount_kobo / 100,
-                                'state' => $payment->verified_at ? 'Verified' : 'Pending verification',
+                                'state' => $payment->verified_at ? 'Verified' : ($payment->rejected_at ? 'Rejected · Not credited' : ($record->paid_at ? 'Not credited · Reservation already paid in full' : 'Pending verification')),
+                                'review_note' => $payment->rejection_reason,
                             ])->all())
                         ->schema([
                             TextEntry::make('reference'),
                             TextEntry::make('method'),
                             TextEntry::make('amount')->money('NGN'),
                             TextEntry::make('state')->label('Status'),
+                            TextEntry::make('review_note')->label('Review note')->placeholder('—'),
                         ])->columns(4)->columnSpanFull(),
                 ])->columns(3),
             Section::make('Booking contact')->schema([
@@ -172,9 +174,12 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => $record->reservation_terms ? \App\Services\ReservationTerms::summary($record->reservation_terms) : 'Legacy reservation — retain previously agreed terms.')
                     ->columnSpanFull(),
                 TextEntry::make('total_price')->label('Reservation total')->money('NGN'),
-                TextEntry::make('payment_verification')->label('Payment')->state(fn (Booking $record) => $record->paid_at ? 'Verified paid' : 'Not verified')->badge(),
-                TextEntry::make('payment_method')->label('Method')->placeholder('Not provided'),
-                TextEntry::make('paid_at')->label('Verified at')->dateTime()->placeholder('Awaiting payment'),
+                TextEntry::make('payment_verification')->label('Payment')->state(fn (Booking $record) => $record->paid_at ? 'Paid in full · Verified' : (\App\Services\AssistedReservationPayments::verified($record) > 0 ? 'Part payment verified · Balance outstanding' : 'No verified payment'))->badge(),
+                TextEntry::make('verified_methods')->label('Verified payment methods')->state(function (Booking $record) {
+                    $methods = \App\Services\AssistedReservationPayments::entries($record)->whereNotNull('verified_at')->distinct()->pluck('method');
+                    return $methods->isNotEmpty() ? $methods->map(fn ($method) => \App\Services\AssistedReservationPayments::METHODS[$method] ?? $method)->implode(' / ') : ($record->paid_at ? ucfirst((string) $record->payment_method) : 'Awaiting verification');
+                }),
+                TextEntry::make('paid_at')->label('Full payment verified at')->dateTime()->placeholder('Full payment not yet verified'),
                 TextEntry::make('payment_reference')->label('Booking reference')->placeholder('Not provided')->copyable(),
                 TextEntry::make('flutterwave_reference')->label('Gateway reference')->placeholder('Not applicable')->copyable(),
             ])->columns(3),
@@ -224,7 +229,7 @@ class GuestStayResource extends Resource
                 Tables\Filters\Filter::make('pos_review')->label('Payments awaiting verification')
                     ->query(fn ($query) => $query->whereExists(fn ($payments) => $payments
                         ->selectRaw('1')->from('assisted_reservation_payments')
-                        ->whereColumn('booking_id', 'bookings.id')->whereNull('verified_at'))),
+                        ->whereColumn('booking_id', 'bookings.id')->whereNull('verified_at')->whereNull('rejected_at'))->whereNull('paid_at')),
                 Tables\Filters\Filter::make('arrivals_today')->label('Arrivals today')
                     ->query(fn ($query) => $query->whereIn('status', ['confirmed', 'paid'])->whereDate('check_in', today(config('property.timezone')))->whereNull('checked_in_at')->whereNull('checked_out_at')),
                 Tables\Filters\Filter::make('in_house')->label('In house')

@@ -36,8 +36,8 @@ class ReservationConfirmationEmail
 
     public static function sendAssisted(Booking $stay, object $payment, bool $confirmationOnly = false): void
     {
-        $email = $stay->booking_contact['email'] ?? $stay->user?->email;
-        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $email = ReservationGuestCommunication::email($stay);
+        if ($email === null) {
             return;
         }
         $details = self::details($stay, $payment->amount_kobo, AssistedReservationPayments::verified($stay),

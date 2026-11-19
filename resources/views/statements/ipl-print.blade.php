@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Insignia Court - Master Statement {{ $statement['from'] }} to {{ $statement['to'] }}</title>
+    <title>Insignia Court - {{ $reportTitle ?? 'Master Statement' }} {{ $statement['from'] }} to {{ $statement['to'] }}</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; background: #f4f1f3; color: #25212a; font: 13px/1.5 Arial, Helvetica, sans-serif; }
@@ -27,6 +27,11 @@
         .negative { color: #a51d38; }
         tfoot { font-weight: 700; }
         .empty { text-align: center; padding: 24px; }
+        .monthly-chart { margin: 20px 0; break-inside: avoid; }
+        .monthly-row { margin: 8px 0; }
+        .monthly-label { display: flex; justify-content: space-between; font-size: 11px; }
+        .monthly-track { height: 8px; background: #f2ebef; margin-top: 3px; }
+        .monthly-bar { height: 8px; background: #4a0e2e; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         footer { border-top: 1px solid #ded8dd; margin-top: 24px; padding-top: 12px; }
         @page { size: A4 landscape; margin: 12mm; }
         @media print {
@@ -50,8 +55,8 @@
 <main class="sheet">
     <header>
         <div>
-            <h1>Master Financial Statement</h1>
-            <p><strong>Insignia Court</strong> &middot; IPL owner statement</p>
+            <h1>{{ $reportTitle ?? 'Master Financial Statement' }}</h1>
+            <p><strong>Insignia Court</strong> &middot; {{ $reportAudience ?? 'IPL owner statement' }}</p>
             <p>Period: {{ $statement['from'] }} to {{ $statement['to'] }}</p>
             <p>Department: {{ $statement['source'] === 'all' ? 'All sources' : ucfirst($statement['source']) }}</p>
             <p class="meta">Generated: {{ $generatedAt->format('d M Y, g:i A') }} (Nigeria time)</p>
@@ -60,9 +65,17 @@
     </header>
     <div class="summary">
         <div class="metric">Recorded inflows<strong>{{ $money($statement['inflow_cents']) }}</strong></div>
-        <div class="metric">Refunds and approved expenses<strong>{{ $money($statement['outflow_cents']) }}</strong></div>
+        <div class="metric">{{ $outflowLabel ?? 'Refunds and approved expenses' }}<strong>{{ $money($statement['outflow_cents']) }}</strong></div>
         <div class="metric">Period net activity<strong>{{ $money($statement['net_cents']) }}</strong></div>
     </div>
+    @if (isset($reportAudience))
+        @php($months = $statement['rows']->filter(fn ($row) => $row['amount_cents'] > 0)->groupBy(fn ($row) => substr($row['date'], 0, 7))->map(fn ($rows) => $rows->sum('amount_cents')))
+        @if ($months->isNotEmpty())
+        <section class="monthly-chart"><h2>Verified receipts by month</h2>
+        @foreach ($months as $month => $amount)<div class="monthly-row"><div class="monthly-label"><span>{{ \Carbon\CarbonImmutable::parse($month.'-01')->format('M Y') }}</span><strong>{{ $money($amount) }}</strong></div><div class="monthly-track"><div class="monthly-bar" style="width: {{ max(1, round(100 * $amount / max(1, $months->max()))) }}%"></div></div></div>@endforeach
+        </section>
+        @endif
+    @endif
     <h2>Transaction details ({{ $statement['rows']->count() }})</h2>
     <table>
         <colgroup><col style="width:12%"><col style="width:10%"><col style="width:8%"><col style="width:16%"><col style="width:10%"><col style="width:16%"><col style="width:14%"><col style="width:14%"></colgroup>

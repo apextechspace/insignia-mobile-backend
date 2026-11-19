@@ -16,12 +16,15 @@ class StatsOverview extends BaseWidget
         $pendingConcierge = ServiceBooking::where('status', 'pending')->count();
         $pendingOrders = Order::where('status', 'pending')->count();
 
-        $thirtyDaysAgo = now()->subDays(30);
-        // Revenue is money verified as collected, not bookings merely created or confirmed.
-        $bookingRevenue = Booking::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_price');
-        $serviceRevenue = ServiceBooking::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_price');
-        $shopRevenue = Order::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_price');
-        $diningRevenue = \App\Models\FoodOrder::whereNotNull('paid_at')->where('paid_at', '>=', $thirtyDaysAgo)->sum('total_amount');
+        // Use the same receipt-date accounting as the statement: deposits count
+        // when verified, and full settlement must not count those payments twice.
+        $today = today(config('property.timezone'));
+        $receipts = app(\App\Services\IplFinancialStatement::class)->report($today->copy()->subDays(29)->toDateString(), $today->toDateString())['rows']
+            ->filter(fn ($row) => $row['amount_cents'] > 0);
+        $bookingRevenue = $receipts->where('source', 'accommodation')->sum('amount_cents') / 100;
+        $serviceRevenue = $receipts->where('source', 'concierge')->sum('amount_cents') / 100;
+        $shopRevenue = $receipts->where('source', 'boutique')->sum('amount_cents') / 100;
+        $diningRevenue = $receipts->where('source', 'dining')->sum('amount_cents') / 100;
         $totalRevenue = $bookingRevenue + $serviceRevenue + $shopRevenue + $diningRevenue;
 
         $pendingRoomBookings = Booking::actionablePending()->count();
@@ -47,8 +50,8 @@ class StatsOverview extends BaseWidget
                 ->description($occupiedRooms > 0 ? 'Suites currently occupied' : 'All suites vacant / ready')
                 ->descriptionIcon('heroicon-m-home-modern', IconPosition::Before)
                 ->color($occupiedRooms >= 3 ? 'success' : 'info'),
-            Stat::make('Total Revenue (30d)', '₦'.number_format($totalRevenue))
-                ->description('Room: ₦'.number_format($bookingRevenue).' · Ancillary: ₦'.number_format($serviceRevenue + $shopRevenue + $diningRevenue))
+            Stat::make('Verified Receipts (30d)', '₦'.number_format($totalRevenue, 2))
+                ->description('Room: ₦'.number_format($bookingRevenue, 2).' · Ancillary: ₦'.number_format($serviceRevenue + $shopRevenue + $diningRevenue, 2))
                 ->descriptionIcon('heroicon-m-banknotes', IconPosition::Before)
                 ->color('success'),
             Stat::make('Bank Receipts to Verify', $receiptsWaitingForReview)

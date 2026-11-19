@@ -30,7 +30,7 @@ class CustomerPaymentEmail extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject($this->details['subject'] ?? $this->details['title'].' | Insignia Courts')
-            ->view(! empty($this->details['reservation_email']) ? 'emails.reservation-confirmation' : 'emails.customer-payment', [
+            ->view(! empty($this->details['reservation_update']) ? 'emails.reservation-update' : (! empty($this->details['reservation_email']) ? 'emails.reservation-confirmation' : 'emails.customer-payment'), [
                 'details' => $this->details,
                 'customerName' => $this->details['customer_name'] ?? $notifiable->name ?? 'Guest',
             ]);

@@ -40,6 +40,27 @@ class AssistedReservationPayments
         return (int) self::entries($booking)->whereNotNull('verified_at')->sum('amount_kobo');
     }
 
+    public static function pending(Booking $booking): \Illuminate\Database\Query\Builder
+    {
+        return self::entries($booking)->whereNull('verified_at')->whereNull('rejected_at');
+    }
+
+    public function reject(Booking $booking, int $paymentId, User $reviewer, string $reason): void
+    {
+        abort_unless(self::canVerify($reviewer), 403);
+        if (trim($reason) === '' || mb_strlen($reason) > 1000) {
+            throw ValidationException::withMessages(['reason' => 'Enter a reason of up to 1,000 characters.']);
+        }
+        DB::transaction(function () use ($booking, $paymentId, $reviewer, $reason) {
+            Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
+            $stay = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $payment = self::pending($stay)->where('id', $paymentId)->first();
+            if (! $payment) throw ValidationException::withMessages(['payment_id' => 'Only an unverified, unreviewed proof can be rejected.']);
+            self::entries($stay)->where('id', $paymentId)->update(['rejected_at' => now(), 'rejected_by' => $reviewer->id, 'rejection_reason' => trim($reason), 'updated_at' => now()]);
+            ReservationGuestCommunication::sendUpdate($stay, 'proof_rejected');
+        }, 3);
+    }
+
     public static function balance(Booking $booking): int
     {
         return max(0, self::kobo($booking->total_price) - self::verified($booking));
@@ -66,11 +87,14 @@ class AssistedReservationPayments
                 $room = Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
                 $stay = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
                 $payment = self::entries($stay)->where('id', $paymentId)->first();
-                if (! $payment || $payment->verified_at || ! self::canCollect($stay)) {
+                if (! $payment || $payment->verified_at || $payment->rejected_at || ! self::canCollect($stay)) {
                     throw ValidationException::withMessages(['payment_id' => 'This payment is no longer awaiting verification.']);
                 }
 
                 $total = self::kobo($stay->total_price);
+                if ($stay->status === 'confirmed' && (int) $payment->amount_kobo !== self::balance($stay)) {
+                    throw ValidationException::withMessages(['payment_id' => 'The balance payment must match the full outstanding balance. Reject incorrect proof and record the correct payment.']);
+                }
                 $verified = self::verified($stay) + $payment->amount_kobo;
                 if ($verified > $total) {
                     throw ValidationException::withMessages(['payment_id' => 'This payment exceeds the remaining balance. Reconcile it before posting.']);
@@ -80,10 +104,14 @@ class AssistedReservationPayments
                     self::assertCanSecure($stay, $room);
                 }
 
+                $bankReference = strtoupper(trim($payment->reference));
+                if ($bankReference === '' || DB::table('manual_payment_reviews')->whereRaw('UPPER(TRIM(bank_transaction_reference)) = ?', [$bankReference])->exists()) {
+                    throw ValidationException::withMessages(['payment_id' => 'This bank transaction reference has already been credited.']);
+                }
                 DB::table('manual_payment_reviews')->insert([
                     'booking_id' => $stay->id,
                     'reviewer_id' => $reviewer->id,
-                    'bank_transaction_reference' => $payment->reference,
+                    'bank_transaction_reference' => $bankReference,
                     'verified_amount' => $payment->amount_kobo / 100,
                     'decision' => 'approved',
                     'notes' => 'Assisted payment #'.$payment->id.' ('.self::METHODS[$payment->method].')',

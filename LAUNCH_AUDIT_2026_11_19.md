@@ -1,5 +1,11 @@
 # Launch audit — 19 November 2026
 
+## Verified receipts follow-up
+
+The later assisted-payment follow-up adds the manager's monthly accommodation receipts card and a rooms-only, date-filtered statement with monthly chart, CSV and protected Print/PDF. It also aligns the owner dashboard with statement receipt accounting, clarifies partial-payment labels, adds branded guest lifecycle messages/WhatsApp drafts, prevents overlapping pending proof submissions, requires the exact remaining balance after a deposit, and preserves rejected proof with reviewer/reason/time. Old unused proofs are excluded from income and retained for audit.
+
+Verification for that follow-up: **208 backend tests passed (1,344 assertions)**, plus **6 final guest-message checks (37 assertions)**, portal production build and ZIP checksum. A new nullable audit-field migration and rebuilt portal assets are required. No storefront release or seeder is needed. See `docs/RESERVATION_POLICY_HANDOVER.md` for the deployment sequence. The live-acceptance boundaries and separate legacy public-proof privacy follow-up below remain applicable.
+
 ## Result
 
 The backend and booking app have passed the automated checks below after the audit fixes. They are ready for a controlled deployment and live acceptance test. This is not a guarantee that every possible defect is absent, or that the Namecheap configuration has been verified. No production database was accessed or cleared during this audit.

@@ -44,6 +44,8 @@ class ReservationPolicyFlowTest extends TestCase
                 'guest_name' => 'Guest', 'guest_phone' => '08012345678', 'guest_email' => 'guest@example.test',
             ])->assertHasNoActionErrors();
         $stay = Booking::sole();
+        Notification::assertSentOnDemand(\App\Notifications\CustomerPaymentEmail::class,
+            fn ($mail) => ($mail->details['reservation_update'] ?? false) && $mail->details['title'] === 'Your room is temporarily held');
         $this->assertSame(8062500, (int) $stay->minimum_payment_kobo);
         $this->assertSame('night_based', $stay->reservation_terms['deposit_mode']);
         $this->actingAs($owner);
@@ -59,9 +61,9 @@ class ReservationPolicyFlowTest extends TestCase
         }
         $this->assertSame(0, AssistedReservationPayments::balance($stay));
         Notification::assertSentOnDemand(\App\Notifications\CustomerPaymentEmail::class,
-            fn ($mail) => $mail->details['full'] === false && $mail->details['balance_kobo'] === 16125000);
+            fn ($mail) => $mail->details['receipt'] && $mail->details['full'] === false && $mail->details['balance_kobo'] === 16125000);
         Notification::assertSentOnDemand(\App\Notifications\CustomerPaymentEmail::class,
-            fn ($mail) => $mail->details['full'] === true && $mail->details['balance_kobo'] === 0);
+            fn ($mail) => $mail->details['receipt'] && $mail->details['full'] === true && $mail->details['balance_kobo'] === 0);
     }
 
     public function test_night_thresholds_and_online_full_payment_are_independent(): void

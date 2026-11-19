@@ -16,6 +16,8 @@ class IplStatementPrintController extends Controller
             'source' => 'required|in:'.implode(',', IplFinancialStatement::SOURCES),
         ]);
         $statement = $reports->report($filters['from'], $filters['to'], $filters['source']);
+        // A standalone print response must not inherit panel asset state.
+        \Livewire\Livewire::flushState();
 
         return response()->view('statements.ipl-print', [
             'statement' => $statement,

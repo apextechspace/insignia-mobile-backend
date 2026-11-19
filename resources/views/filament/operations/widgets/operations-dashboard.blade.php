@@ -51,7 +51,13 @@
             <x-filament::section>
                 <x-slot name="heading">Manager Review Queue</x-slot>
                 <x-slot name="description">Review room readiness, urgent issues and accommodation finance.</x-slot>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                        <p class="text-sm text-gray-600 dark:text-gray-300">Verified Room Receipts · This Month</p>
+                        <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">₦{{ number_format($monthRoomReceipts / 100, 2) }}</p>
+                        <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">Includes verified deposits and balances. Accommodation only.</p>
+                        <div class="mt-3"><x-filament::button tag="a" size="sm" :href="\App\Filament\Operations\Pages\AccommodationStatement::getUrl(panel: 'operations')">View / Print Receipts</x-filament::button></div>
+                    </div>
                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
                         <p class="text-sm text-gray-600 dark:text-gray-300">Operating Float</p>
                         <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">₦{{ number_format($imprestBalance, 2) }}</p>

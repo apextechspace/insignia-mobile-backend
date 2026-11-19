@@ -48,7 +48,7 @@ class IplMasterStatement extends Page
     {
         abort_unless(static::canAccess(), 403);
         $statement = $this->statement();
-        $filename = "ipl-operating-statement-{$statement['from']}-{$statement['to']}.csv";
+        $filename = $this->exportFilename($statement);
 
         return response()->streamDownload(function () use ($statement): void {
             $out = fopen('php://output', 'w');
@@ -67,5 +67,10 @@ class IplMasterStatement extends Page
             }
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    protected function exportFilename(array $statement): string
+    {
+        return "ipl-operating-statement-{$statement['from']}-{$statement['to']}.csv";
     }
 }

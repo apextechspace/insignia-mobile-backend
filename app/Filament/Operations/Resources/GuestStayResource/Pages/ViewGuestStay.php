@@ -26,6 +26,11 @@ class ViewGuestStay extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('sendGuestWhatsApp')->label('Send Guest Update via WhatsApp')->icon('heroicon-o-chat-bubble-left-right')
+                ->authorize(fn () => GuestStayResource::canViewAny())
+                ->visible(fn () => \App\Services\ReservationGuestCommunication::whatsappUrl($this->record) !== null)
+                ->tooltip('Opens a prefilled message. Review it and press Send in WhatsApp.')
+                ->url(fn () => \App\Services\ReservationGuestCommunication::whatsappUrl($this->record))->openUrlInNewTab(),
             Action::make('approveDepositException')->label('Approve Deposit Exception')
                 ->authorize(fn () => auth()->user()?->isIplAdmin()
                     && AssistedReservationPayments::canCollect($this->record)
@@ -45,6 +50,8 @@ class ViewGuestStay extends ViewRecord
             Action::make('recordPosPayment')
                 ->label(fn (): string => $this->record->status === 'confirmed' ? 'Collect Balance' : 'Record Payment')
                 ->authorize(fn () => GuestStayResource::canViewAny() && AssistedReservationPayments::canCollect($this->record))
+                ->disabled(fn () => AssistedReservationPayments::pending($this->record)->exists())
+                ->tooltip(fn () => AssistedReservationPayments::pending($this->record)->exists() ? 'A proof is already awaiting verification. Verify or reject it before recording another payment.' : null)
                 ->modalDescription(fn (): string => $this->record->status === 'confirmed'
                     ? 'Outstanding balance: ₦'.number_format(AssistedReservationPayments::balance($this->record) / 100, 2).'. Upload proof after collecting payment. Check-in opens once the full balance is verified.'
                     : 'The first receipt uploaded during an active hold gives staff two hours to verify the payment.')
@@ -55,6 +62,7 @@ class ViewGuestStay extends ViewRecord
                     Components\Select::make('method')->label('Payment method')->options(AssistedReservationPayments::METHODS)
                         ->default('pos')->required(),
                     Components\TextInput::make('amount')->label('Amount received (₦)')
+                        ->readOnly(fn () => $this->record->status === 'confirmed')
                         ->required()->numeric()->rules(['decimal:0,2'])->minValue(0.01)->maxValue(99999999.99),
                     Components\TextInput::make('reference')->label('Bank transaction reference')->required()->maxLength(120),
                     Components\DatePicker::make('transaction_date')->required()
@@ -72,12 +80,20 @@ class ViewGuestStay extends ViewRecord
                         Room::whereKey($this->record->room_id)->lockForUpdate()->firstOrFail();
                         $stay = $this->record->newQuery()->lockForUpdate()->findOrFail($this->record->id);
                         abort_unless(AssistedReservationPayments::canCollect($stay), 409);
+                        if (AssistedReservationPayments::pending($stay)->exists()) {
+                            throw ValidationException::withMessages(['data.reference' => 'A proof is already awaiting verification. Verify or reject it before recording another payment.']);
+                        }
                         $amount = AssistedReservationPayments::kobo($data['amount']);
+                        if ($stay->status === 'confirmed' && $amount !== AssistedReservationPayments::balance($stay)) {
+                            throw ValidationException::withMessages(['data.amount' => 'Record the full outstanding balance for this confirmed reservation.']);
+                        }
                         if ($amount > AssistedReservationPayments::balance($stay)) {
                             throw ValidationException::withMessages(['data.amount' => 'The amount exceeds the outstanding balance.']);
                         }
-                        if (AssistedReservationPayments::entries($stay)->where('reference', $reference)->exists()) {
-                            throw ValidationException::withMessages(['data.reference' => 'This reference is already recorded on the reservation.']);
+                        if (AssistedReservationPayments::entries($stay)->where('reference', $reference)->whereNull('rejected_at')->exists()
+                            || DB::table('manual_payment_reviews')->whereRaw('UPPER(TRIM(bank_transaction_reference)) = ?', [$reference])->exists()
+                            || DB::table('assisted_reservation_payments')->whereRaw('UPPER(TRIM(reference)) = ?', [$reference])->whereNull('rejected_at')->exists()) {
+                            throw ValidationException::withMessages(['data.reference' => 'This transaction reference is already recorded. It cannot be submitted again.']);
                         }
                         $reviewExpiry = AssistedReservationPayments::reviewHoldExpiry($stay);
                         $path = $file->store('assisted-pos-receipts', 'local');
@@ -91,6 +107,7 @@ class ViewGuestStay extends ViewRecord
                         if ($reviewExpiry) {
                             $stay->update(['hold_expires_at' => $reviewExpiry]);
                         }
+                        \App\Services\ReservationGuestCommunication::sendUpdate($stay, 'proof_submitted');
 
                         return $reviewExpiry;
                     });
@@ -111,7 +128,7 @@ class ViewGuestStay extends ViewRecord
                     return Storage::disk('local')->download($payment->proof_path);
                 }),
             Action::make('verifyPosPayment')->label('Verify Payment')
-                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && AssistedReservationPayments::canCollect($this->record))
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && AssistedReservationPayments::canCollect($this->record) && AssistedReservationPayments::pending($this->record)->exists())
                 ->form([
                     Components\Select::make('payment_id')->label('Payment')->required()
                         ->options(fn () => $this->paymentOptions(pendingOnly: true)),
@@ -126,6 +143,19 @@ class ViewGuestStay extends ViewRecord
                     }
                     $this->record->refresh();
                     Notification::make()->success()->title('Payment verified')->send();
+                }),
+            Action::make('rejectPaymentProof')->label('Reject Incorrect Proof')->color('danger')
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && AssistedReservationPayments::pending($this->record)->exists())
+                ->modalDescription('This does not refund or reverse money. It rejects unverified evidence only and preserves the audit history.')
+                ->form([
+                    Components\Select::make('payment_id')->label('Unverified proof')->required()->options(fn () => $this->paymentOptions(pendingOnly: true)),
+                    Components\Textarea::make('reason')->label('Reason')->required()->maxLength(1000),
+                ])
+                ->action(function (Action $action, array $data) {
+                    try { app(AssistedReservationPayments::class)->reject($this->record, (int) $data['payment_id'], auth()->user(), $data['reason']); }
+                    catch (ValidationException $exception) { Notification::make()->danger()->title($exception->getMessage())->send(); $action->halt(); }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Incorrect proof rejected. Verified payments are unchanged.')->send();
                 }),
             Action::make('check_in')->label('Check In')->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('success')->modalHeading('Register guest and check in')
@@ -151,7 +181,7 @@ class ViewGuestStay extends ViewRecord
     private function paymentOptions(bool $pendingOnly = false): array
     {
         return AssistedReservationPayments::entries($this->record)
-            ->when($pendingOnly, fn ($query) => $query->whereNull('verified_at'))
+            ->when($pendingOnly, fn ($query) => $query->whereNull('verified_at')->whereNull('rejected_at'))
             ->get()->mapWithKeys(fn ($payment) => [
                 $payment->id => AssistedReservationPayments::METHODS[$payment->method].' · '.$payment->reference.' · ₦'.number_format($payment->amount_kobo / 100, 2),
             ])->all();

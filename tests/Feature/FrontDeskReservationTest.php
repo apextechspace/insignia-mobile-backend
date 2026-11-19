@@ -33,8 +33,7 @@ class FrontDeskReservationTest extends TestCase
         $this->actingAs($manager);
         \Illuminate\Support\Facades\Storage::fake('local');
         $originalHold = $stay->hold_expires_at;
-        $reviewHold = null;
-        foreach (['POS-A', 'POS-B'] as $reference) {
+        foreach (['POS-A'] as $reference) {
             $proof = \Illuminate\Http\UploadedFile::fake()->createWithContent('pos.png',
                 base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1uoAAAAASUVORK5CYII='));
             Livewire::test($page, ['record' => $stay->id])
@@ -45,18 +44,14 @@ class FrontDeskReservationTest extends TestCase
                 ->set('mountedActionsData.0.reference', $reference)
                 ->set('mountedActionsData.0.transaction_date', today(config('property.timezone'))->toDateString())
                 ->callMountedAction()->assertHasNoActionErrors();
-            if ($reviewHold === null) {
                 $reviewHold = $stay->fresh()->hold_expires_at;
                 $this->assertTrue($reviewHold->gt($originalHold));
                 $this->assertSame('Payment under review', GuestStayResource::stayStage($stay->fresh()));
                 $this->travel(16)->minutes();
                 $this->assertTrue(\App\Services\RoomAvailability::blocking($stay->check_in, $stay->check_out)
                     ->whereKey($stay->id)->exists());
-            } else {
-                $this->assertTrue($stay->fresh()->hold_expires_at->equalTo($reviewHold));
-            }
         }
-        $this->assertDatabaseCount('assisted_reservation_payments', 2);
+        $this->assertDatabaseCount('assisted_reservation_payments', 1);
         $this->actingAs($owner);
         Livewire::test($page, ['record' => $stay->id])
             ->callAction('verifyPosPayment', data: ['payment_id' => 1, 'verified' => true])->assertHasNoActionErrors();
@@ -73,6 +68,13 @@ class FrontDeskReservationTest extends TestCase
             ->update(['vrl_can_verify_pos' => true]);
         $frontDesk = User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS]);
         $this->assertFalse(\App\Services\AssistedReservationPayments::canVerify($frontDesk));
+        $proof = \Illuminate\Http\UploadedFile::fake()->createWithContent('balance.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1uoAAAAASUVORK5CYII='));
+        Livewire::test($page, ['record' => $stay->id])->mountAction('recordPosPayment')
+            ->set('mountedActionsData.0.proof', [$proof])->set('mountedActionsData.0.amount', '150000')
+            ->set('mountedActionsData.0.method', 'bank_transfer')->set('mountedActionsData.0.reference', 'POS-B')
+            ->set('mountedActionsData.0.transaction_date', today(config('property.timezone'))->toDateString())
+            ->callMountedAction()->assertHasNoActionErrors();
         Livewire::test($page, ['record' => $stay->id])
             ->callAction('verifyPosPayment', data: ['payment_id' => 2, 'verified' => true])->assertHasNoActionErrors();
         $this->assertTrue(GuestStayResource::canCheckIn($stay->fresh()));
