@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'check_in_time' => '14:00',
+    'check_in_time' => '13:00',
     'check_out_time' => '12:00',
     'timezone' => env('PROPERTY_TIMEZONE', 'Africa/Lagos'),
     'pos_review_hold_minutes' => 120,

@@ -26,7 +26,8 @@ class ReservationTerms
         }
 
         return [
-            'version' => 1, 'nights' => $nights,
+            'version' => 2, 'nights' => $nights,
+            'refund_admin_fee_percent' => 10, 'refund_processing_hours_after_checkout' => 24,
             'deposit_mode' => $assisted && $policy->deposits_enabled ? $policy->deposit_mode : 'full',
             'minimum_kobo' => $assisted ? ($minimum ?? AssistedReservationPayments::minimum($total, $nights)) : AssistedReservationPayments::kobo($total),
             'cancellation_enabled' => (bool) $policy->cancellation_terms_enabled,
@@ -42,7 +43,10 @@ class ReservationTerms
     {
         $text = 'Required verified payment: ₦'.number_format($terms['minimum_kobo'] / 100, 2).'. Remaining balance must be verified before check-in. Final room prices already include any owner-applied taxes.';
         if ($terms['cancellation_enabled']) {
-            $text .= ' Full-refund deadline: '.CarbonImmutable::parse($terms['refund_deadline'])->format('D, j M Y, g:i A').' Nigeria time.'.(! empty($terms['booked_after_deadline']) ? ' This booking is already outside that free-cancellation window.' : '').' Later cancellations or no-shows: retain up to ₦'.number_format($terms['cancellation_charge_kobo'] / 100, 2).' of money received. Contact Guest Relations; refunds and room release require manual handling.';
+            $text .= (isset($terms['refund_admin_fee_percent']) ? ' Cancellation notice deadline: ' : ' Full-refund deadline: ').CarbonImmutable::parse($terms['refund_deadline'])->format('D, j M Y, g:i A').' Nigeria time.'.(! empty($terms['booked_after_deadline']) ? ' This booking is already outside that free-cancellation window.' : '').' Later cancellations or no-shows: retain up to ₦'.number_format($terms['cancellation_charge_kobo'] / 100, 2).' of money received. Contact Guest Relations; refunds and room release require manual handling.';
+        }
+        if (isset($terms['refund_admin_fee_percent'])) {
+            $text .= ' Eligible refunds are subject to a '.$terms['refund_admin_fee_percent'].'% administration fee on the refundable amount after used nights and approved charges; no additional VAT deduction. Eligible post-checkout refunds are processed within '.$terms['refund_processing_hours_after_checkout'].' hours after checkout. Refund eligibility and payout require management review.';
         }
 
         return $text;

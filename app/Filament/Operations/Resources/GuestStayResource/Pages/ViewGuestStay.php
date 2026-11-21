@@ -26,6 +26,9 @@ class ViewGuestStay extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('printRegistrationCard')->label('Print Registration Card')->icon('heroicon-o-printer')
+                ->authorize(fn () => GuestStayResource::canViewAny())
+                ->url(fn () => route('guest-registration-card.print', ['booking' => $this->record->id]))->openUrlInNewTab(),
             Action::make('sendGuestWhatsApp')->label('Send Guest Update via WhatsApp')->icon('heroicon-o-chat-bubble-left-right')
                 ->authorize(fn () => GuestStayResource::canViewAny())
                 ->visible(fn () => \App\Services\ReservationGuestCommunication::whatsappUrl($this->record) !== null)

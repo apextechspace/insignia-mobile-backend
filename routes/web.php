@@ -9,6 +9,9 @@ Route::get('/admin/ipl-statement-print', \App\Http\Controllers\IplStatementPrint
 Route::get('/operations/accommodation-statement-print', \App\Http\Controllers\AccommodationStatementPrintController::class)
     ->name('accommodation-statement.print');
 
+Route::get('/operations/guest-registration-card/{booking}', \App\Http\Controllers\GuestRegistrationCardController::class)
+    ->name('guest-registration-card.print');
+
 Route::get('/', function () {
     if (Auth::check()) {
         $user = Auth::user();

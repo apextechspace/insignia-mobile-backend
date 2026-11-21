@@ -50,6 +50,7 @@ class StayOperationsService
             $registration = Validator::make($guestDetails, [
                 'full_name' => ['required', 'string', 'max:255'],
                 'phone' => ['required', 'string', 'max:40'],
+                'additional_guest_names' => ['nullable', 'string', 'max:2000'],
                 'adults' => ['required', 'integer', 'min:1', 'max:20'],
                 'children' => ['required', 'integer', 'min:0', 'max:20'],
                 'identity_verified' => ['required', 'accepted'],

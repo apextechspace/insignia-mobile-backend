@@ -28,12 +28,19 @@
 @if ($details['confirmed'] && !empty($details['terms']['cancellation_enabled']))
 @php($charge = min($details['total_paid_kobo'], $details['terms']['cancellation_charge_kobo']))
 <h2 style="font-size:18px;color:#4a0e2e">If your plans change</h2>
-@if (!empty($details['terms']['booked_after_deadline']))<p>This reservation was made after its free-cancellation deadline of {{ $localDate($details['terms']['refund_deadline']) }}. The late-cancellation terms below apply.</p>@endif
+@if (!empty($details['terms']['booked_after_deadline']))<p>This reservation was made after its {{ isset($details['terms']['refund_admin_fee_percent']) ? 'cancellation notice deadline' : 'free-cancellation deadline' }} of {{ $localDate($details['terms']['refund_deadline']) }}. The late-cancellation terms below apply.</p>@endif
+@if (isset($details['terms']['refund_admin_fee_percent']))
+<p>Please contact us by {{ $localDate($details['terms']['refund_deadline']) }} to request an eligible cancellation refund, subject to the administration fee below. For later cancellations or no-shows, we retain {{ $money($charge) }}, covering up to your first {{ $details['terms']['cancellation_charge_nights'] === 1 ? 'night' : 'three nights' }}. The remaining eligible amount before the administration fee would be {{ $money(max(0, $details['total_paid_kobo'] - $charge)) }}.</p>
+@else
 <p>Please contact us by {{ $localDate($details['terms']['refund_deadline']) }} to request a full refund of your accommodation payment. For later cancellations or no-shows, we retain {{ $money($charge) }}, covering up to your first {{ $details['terms']['cancellation_charge_nights'] === 1 ? 'night' : 'three nights' }}. The remaining refundable amount would be {{ $money(max(0, $details['total_paid_kobo'] - $charge)) }}.</p>
+@endif
 <p>Refunds are arranged by management after reviewing your request; they are not processed automatically.</p>
 @if (!empty($details['terms']['release_review_at']))
 <p>Unless you arrange a later arrival with us, management may release the room for the remainder of your stay from {{ $localDate($details['terms']['release_review_at']) }}.</p>
 @endif
+@endif
+@if ($details['confirmed'] && isset($details['terms']['refund_admin_fee_percent']))
+<p><strong>Refund policy:</strong> A {{ $details['terms']['refund_admin_fee_percent'] }}% administration fee applies to the eligible refund amount after used nights and approved charges are deducted. No additional VAT deduction applies. Eligible post-checkout refunds are processed within {{ $details['terms']['refund_processing_hours_after_checkout'] }} hours after checkout. Refund eligibility and actual payout require management review; refunds are not processed automatically.</p>
 @endif
 <p>If you expect to arrive late, please reply to this email or call +{{ $details['phone'] }} so we can arrange your check-in.</p>
 <p>We look forward to welcoming you.</p><p>Warm regards,<br><strong>Guest Relations</strong><br>Insignia Court</p>

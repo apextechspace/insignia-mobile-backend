@@ -87,14 +87,14 @@ class ReservationPolicyFlowTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-12-01 10:00', 'Africa/Lagos'));
         $this->enablePolicy();
         $short = ReservationTerms::snapshot('2026-12-10', '2026-12-12', '161250', true);
-        $this->assertSame('2026-12-08T14:00:00+01:00', $short['refund_deadline']);
+        $this->assertSame('2026-12-08T13:00:00+01:00', $short['refund_deadline']);
         $long = ReservationTerms::snapshot('2026-12-20', '2026-12-27', '564375', true);
-        $this->assertSame('2026-12-13T14:00:00+01:00', $long['refund_deadline']);
+        $this->assertSame('2026-12-13T13:00:00+01:00', $long['refund_deadline']);
         DB::table('reservation_payment_policy')->where('id', 1)->update(['late_booking_grace_enabled' => true]);
         $grace = ReservationTerms::snapshot('2026-12-05', '2026-12-12', '564375', true);
         $this->assertSame('2026-12-02T10:00:00+01:00', $grace['refund_deadline']);
         $sameDay = ReservationTerms::snapshot('2026-12-01', '2026-12-08', '564375', true);
-        $this->assertSame('2026-12-01T14:00:00+01:00', $sameDay['refund_deadline']);
+        $this->assertSame('2026-12-01T13:00:00+01:00', $sameDay['refund_deadline']);
         $this->assertSame('2026-12-02T12:00:00+01:00', $sameDay['release_review_at']);
         $room = Room::create(['name' => 'Suite', 'type' => 'Suite', 'price_per_night' => 80625]);
         $stay = Booking::create(['room_id' => $room->id, 'reserved_by' => User::factory()->create()->id,

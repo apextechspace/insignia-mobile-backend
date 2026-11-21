@@ -1,5 +1,7 @@
 # Namecheap backend dashboard assets
 
+The November 21 registration-card release adds protected A4 printing from Guest Relations, policy version 2 for new reservations and 1 PM check-in. See `docs/GUEST_REGISTRATION_CARD.md`. It preserves old saved terms and requires the matching app build for public booking wording. This phase needs no new migration or seeder.
+
 Current `feature/guest-booking` audit release: see `LAUNCH_AUDIT_2026_11_19.md`. Use that branch when deploying the current ZIP; the older branch command below describes the original release only. The rebuilt stylesheet includes the manager review cards, narrow-screen layout and portal dark-mode utilities.
 
 The receipts follow-up adds Operations → Finance → Accommodation Receipts, its printable statement/monthly chart, the manager monthly receipt card and guest communication/payment-proof controls. Run `php artisan migrate --force` for `2026_11_19_000002_add_assisted_proof_review_outcomes`, then verify/extract the current asset ZIP and refresh caches/workers. See `docs/RESERVATION_POLICY_HANDOVER.md`. No storefront upload or seeder is needed.

@@ -86,6 +86,8 @@ class GuestStayResource extends Resource
                 ->content('Verify the guest identity and review payment, stay dates and room readiness. Hand over keys after check-in succeeds.'),
             Components\TextInput::make('full_name')->label('Arriving guest full name')->required()->maxLength(255),
             Components\TextInput::make('phone')->label('Guest phone')->tel()->required()->maxLength(40),
+            Components\Textarea::make('additional_guest_names')->label('Additional guest names')->maxLength(2000)
+                ->helperText('Enter each additional overnight guest on a separate line for the registration card.'),
             Components\TextInput::make('adults')->numeric()->integer()->minValue(1)->maxValue(20)->required(),
             Components\TextInput::make('children')->numeric()->integer()->minValue(0)->maxValue(20)->required(),
             Components\Textarea::make('notes')->label('Arrival notes')->maxLength(2000)
@@ -238,6 +240,8 @@ class GuestStayResource extends Resource
                     ->query(fn ($query) => $query->whereNotNull('checked_in_at')->whereNull('checked_out_at')->whereDate('check_out', '<=', today(config('property.timezone')))),
             ])
             ->actions([
+                Tables\Actions\Action::make('printRegistrationCard')->label('Print Card')->icon('heroicon-o-printer')
+                    ->url(fn (Booking $record) => route('guest-registration-card.print', ['booking' => $record->id]))->openUrlInNewTab(),
                 Tables\Actions\ViewAction::make()->label('Guest details'),
                 Tables\Actions\Action::make('check_in')
                     ->label('Check In')->icon('heroicon-o-arrow-right-on-rectangle')
