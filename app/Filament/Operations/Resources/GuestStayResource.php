@@ -56,6 +56,14 @@ class GuestStayResource extends Resource
         if ($record->checked_in_at) return 'In house';
         if (!$record->paid_at && $record->status === 'cancelled') return 'Cancelled';
         if (!$record->paid_at && $record->hold_expires_at?->lte(now())) return $record->reserved_by ? 'Hold expired' : 'Checkout expired';
+        if ($record->external_source && in_array($record->status, ['confirmed', 'paid'], true)) {
+            if (\App\Services\ExternalReservations::guestPaymentCleared($record)) return 'Awaiting arrival';
+            return match ($record->external_details['payment_arrangement'] ?? null) {
+                'pay_at_property' => 'Reserved · Payment due at property',
+                'channel_collects' => 'Reserved · Channel payment under review',
+                default => 'Reserved · Payment arrangement under review',
+            };
+        }
         if ($record->reserved_by && !$record->paid_at && $record->status === 'pending') {
             return \App\Services\AssistedReservationPayments::pending($record)->exists()
                 ? 'Payment under review' : 'Temporary hold';
@@ -68,7 +76,7 @@ class GuestStayResource extends Resource
 
     public static function canCheckIn(Booking $record): bool
     {
-        return self::canViewAny() && $record->paid_at
+        return self::canViewAny() && \App\Services\ExternalReservations::guestPaymentCleared($record)
             && !$record->checked_in_at && !$record->checked_out_at
             && in_array($record->status, ['confirmed', 'paid'], true);
     }
@@ -121,8 +129,13 @@ class GuestStayResource extends Resource
                 TextEntry::make('arrival_guidance')->label('Next step')->state(fn (Booking $record) => match (true) {
                     (bool) $record->checked_out_at => 'Stay completed. Housekeeping must finish and a supervisor must verify the room before it is released.',
                     (bool) $record->checked_in_at => 'Guest is in house. On departure, collect keys and complete checkout to start housekeeping.',
-                    !$record->paid_at && $record->reserved_by && $record->status === 'confirmed' => 'Use Collect Balance to record the remaining payment. Verify it before checking in this guest.',
-                    !$record->paid_at => 'Await verified payment before checking in this guest.',
+                    $record->external_source && !\App\Services\ExternalReservations::guestPaymentCleared($record) => match ($record->external_details['payment_arrangement'] ?? null) {
+                        'pay_at_property' => 'Record and verify the amount received by Insignia before check-in. The channel confirmation already secures the dates.',
+                        'channel_collects' => 'Ask an authorised reviewer to verify the guest payment against the original channel record. Do not collect a duplicate payment while channel evidence is being reviewed.',
+                        default => 'Ask management to confirm the payment arrangement against the channel record before collecting money or checking in.',
+                    },
+                    !\App\Services\ExternalReservations::guestPaymentCleared($record) && $record->reserved_by && $record->status === 'confirmed' => 'Use Collect Balance to record the remaining payment. Verify it before checking in this guest.',
+                    !\App\Services\ExternalReservations::guestPaymentCleared($record) => 'Await verified payment before checking in this guest.',
                     !in_array($record->status, ['confirmed', 'paid'], true) => 'This reservation is not active for check-in. Review its status with finance or operations.',
                     today(config('property.timezone'))->toDateString() < $record->check_in => 'Arrival is scheduled for a future date. Check-in opens on the arrival date.',
                     today(config('property.timezone'))->toDateString() >= $record->check_out => 'The scheduled stay has ended. Review the reservation before processing an arrival.',
@@ -130,10 +143,20 @@ class GuestStayResource extends Resource
                     default => 'Review the guest details, complete registration and verify identity. Hand over keys after check-in succeeds.',
                 })->columnSpanFull(),
             ])->columns(3),
-            Section::make('Assisted payments')
-                ->visible(fn (Booking $record) => $record->reserved_by || $record->minimum_payment_kobo !== null)
+            Section::make('External reservation')->visible(fn (Booking $record) => filled($record->external_source))->schema([
+                TextEntry::make('external_source')->label('Booked through')->formatStateUsing(fn ($state, Booking $record) => \App\Services\ExternalReservations::sourceLabel($record)),
+                TextEntry::make('external_reference')->label('Channel reservation reference')->copyable(),
+                TextEntry::make('external_unit_reference')->label('Room-line reference'),
+                TextEntry::make('external_details.payment_arrangement')->label('Payment arrangement')->formatStateUsing(fn ($state) => \App\Services\ExternalReservations::ARRANGEMENTS[$state] ?? 'Review required'),
+                TextEntry::make('external_details.guest_payment_verified_at')->label('Guest channel payment verified at')->dateTime()->placeholder('Not verified'),
+                TextEntry::make('external_details.channel_terms')->label('Original channel payment / cancellation terms')->columnSpanFull(),
+                TextEntry::make('channel_settlement_note')->state('Channel payment verification is not a bank payout to Insignia. Do not request duplicate payment or count it as a received bank settlement.')->columnSpanFull(),
+            ])->columns(['default' => 1, 'md' => 3]),
+            Section::make('Assisted payments')->heading(fn (Booking $record) => $record->external_source ? 'Property payments' : 'Assisted payments')
+                ->visible(fn (Booking $record) => (!$record->external_source || ($record->external_details['payment_arrangement'] ?? null) === 'pay_at_property') && ($record->reserved_by || $record->minimum_payment_kobo !== null))
                 ->schema([
                     TextEntry::make('minimum_due')->label('Minimum to secure dates')->money('NGN')
+                        ->visible(fn (Booking $record) => !$record->external_source)
                         ->state(fn (Booking $record) => ($record->minimum_payment_kobo ?? \App\Services\AssistedReservationPayments::kobo($record->total_price)) / 100),
                     TextEntry::make('verified_total')->label('Verified payments')->money('NGN')
                         ->state(fn (Booking $record) => \App\Services\AssistedReservationPayments::verified($record) / 100),
@@ -176,7 +199,7 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => $record->reservation_terms ? \App\Services\ReservationTerms::summary($record->reservation_terms) : 'Legacy reservation — retain previously agreed terms.')
                     ->columnSpanFull(),
                 TextEntry::make('total_price')->label('Reservation total')->money('NGN'),
-                TextEntry::make('payment_verification')->label('Payment')->state(fn (Booking $record) => $record->paid_at ? 'Paid in full · Verified' : (\App\Services\AssistedReservationPayments::verified($record) > 0 ? 'Part payment verified · Balance outstanding' : 'No verified payment'))->badge(),
+                TextEntry::make('payment_verification')->label('Payment')->state(fn (Booking $record) => \App\Services\ExternalReservations::channelPaymentVerified($record) ? 'Guest paid channel · Property payout separate' : ($record->paid_at ? 'Paid in full · Verified' : (\App\Services\AssistedReservationPayments::verified($record) > 0 ? 'Part payment verified · Balance outstanding' : 'No verified payment')))->badge(),
                 TextEntry::make('verified_methods')->label('Verified payment methods')->state(function (Booking $record) {
                     $methods = \App\Services\AssistedReservationPayments::entries($record)->whereNotNull('verified_at')->distinct()->pluck('method');
                     return $methods->isNotEmpty() ? $methods->map(fn ($method) => \App\Services\AssistedReservationPayments::METHODS[$method] ?? $method)->implode(' / ') : ($record->paid_at ? ucfirst((string) $record->payment_method) : 'Awaiting verification');
@@ -212,6 +235,8 @@ class GuestStayResource extends Resource
             ->defaultSort('check_in', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('id')->label('Booking #')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('external_source')->label('Source')->formatStateUsing(fn ($state, Booking $record) => $record->external_source ? \App\Services\ExternalReservations::sourceLabel($record) : 'Direct')->placeholder('Direct')->badge()->toggleable(),
+                Tables\Columns\TextColumn::make('external_reference')->label('Channel reference')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('payment_reference')->label('Booking reference')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('room.name')->label('Suite')->searchable(),
                 Tables\Columns\TextColumn::make('user.name')->label('Guest')
@@ -228,6 +253,8 @@ class GuestStayResource extends Resource
                     ->state(fn (Booking $record) => self::stayStage($record))->badge(),
             ])
             ->filters([
+                Tables\Filters\Filter::make('external_reservations')->label('External channel reservations')->query(fn ($query) => $query->whereNotNull('external_source')),
+                Tables\Filters\Filter::make('external_payment_review')->label('External payment arrangement under review')->query(fn ($query) => $query->whereNotNull('external_source')->where('status', 'confirmed')->where('external_details->payment_arrangement', 'review_required')),
                 Tables\Filters\Filter::make('pos_review')->label('Payments awaiting verification')
                     ->query(fn ($query) => $query->whereExists(fn ($payments) => $payments
                         ->selectRaw('1')->from('assisted_reservation_payments')

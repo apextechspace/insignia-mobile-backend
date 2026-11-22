@@ -22,6 +22,40 @@ class ListGuestStays extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('recordExternalReservation')->label('Record External Booking')->icon('heroicon-o-globe-alt')
+                ->authorize(fn () => GuestStayResource::canViewAny())
+                ->modalHeading('Record a confirmed external reservation')
+                ->modalDescription('One room per entry. Check the original channel confirmation first. This blocks dates locally only: update the channel calendar manually for direct bookings, changes and cancellations. Do not enter payment card details.')
+                ->form([
+                    Components\Section::make('Channel confirmation')->schema([
+                        Components\Select::make('source')->label('Booked through')->options(\App\Services\ExternalReservations::SOURCES)->default('booking_com')->required()->live(),
+                        Components\TextInput::make('other_source_name')->label('Other channel name')->maxLength(30)->required(fn (Get $get) => $get('source') === 'other')->visible(fn (Get $get) => $get('source') === 'other'),
+                        Components\TextInput::make('reference')->label('Channel reservation reference')->required()->maxLength(120),
+                        Components\TextInput::make('unit_reference')->label('Room-line reference')->default('1')->required()->maxLength(40)
+                            ->helperText('For several rooms under one channel reference, record each room separately with a different room-line reference (1, 2, etc.).'),
+                    ])->columns(['default' => 1, 'md' => 2]),
+                    Components\Section::make('Room and agreed stay')->schema([
+                        Components\Select::make('room_id')->label('Physical room / suite')->options(fn () => Room::where('is_available', true)->where('status', '!=', 'maintenance')->pluck('name', 'id'))->searchable()->required(),
+                        Components\DatePicker::make('check_in')->required()->format('Y-m-d'),
+                        Components\DatePicker::make('check_out')->required()->format('Y-m-d')->after('check_in'),
+                        Components\TextInput::make('total')->label('Agreed total for this room (NGN)')->numeric()->minValue(0.01)->maxValue(99999999.99)->required()->helperText('Use this room line’s confirmed amount including taxes. Do not repeat the whole multi-room total, substitute our direct rate or deduct channel commission.'),
+                        Components\Select::make('guests')->options([1 => '1 guest', 2 => '2 guests'])->default(1)->required(),
+                    ])->columns(['default' => 1, 'md' => 2]),
+                    Components\Section::make('Guest and payment arrangement')->schema([
+                        Components\TextInput::make('guest_name')->label('Lead guest name')->required()->maxLength(255),
+                        Components\TextInput::make('guest_phone')->label('Guest phone (if provided)')->tel()->maxLength(40),
+                        Components\TextInput::make('guest_email')->label('Guest email (if provided)')->email()->maxLength(255),
+                        Components\Select::make('payment_arrangement')->options(\App\Services\ExternalReservations::ARRANGEMENTS)->default('review_required')->required(),
+                        Components\Textarea::make('channel_terms')->label('Original channel payment and cancellation terms')->required()->maxLength(4000)->columnSpanFull(),
+                        Components\Checkbox::make('confirmation_checked')->label('I checked the channel reference, room, dates, amount and terms against the confirmed reservation')->accepted()->required()->columnSpanFull(),
+                    ])->columns(['default' => 1, 'md' => 2]),
+                ])
+                ->action(function (Action $action, array $data) {
+                    try { $stay = app(\App\Services\ExternalReservations::class)->create($data, auth()->user()); }
+                    catch (ValidationException $exception) { Notification::make()->danger()->title($exception->getMessage())->send(); $action->halt(); }
+                    Notification::make()->success()->title('External reservation recorded. Dates blocked locally.')->body('Keep availability and changes updated on the external channel manually.')->send();
+                    return redirect(GuestStayResource::getUrl('view', ['record' => $stay]));
+                }),
             Action::make('depositSettings')->label('Deposit Settings')
                 ->visible(fn () => auth()->user()?->isIplAdmin())
                 ->url(fn () => \App\Filament\Pages\ManualBankSettings::getUrl(panel: 'admin')),

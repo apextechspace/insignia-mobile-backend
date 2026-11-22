@@ -8,7 +8,7 @@
 <tr><td style="padding:0 28px 28px"><h1 style="font:28px Georgia,serif;color:#4a0e2e">{{ $details['title'] }}</h1>
 <p>Dear {{ $customerName }},</p><p>{{ $details['update_text'] }}</p>
 <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-@foreach (['Booking reference' => $details['number'], 'Status' => $details['stay_stage'], 'Room / suite' => $details['room_name'], 'Room category' => $details['room_category'], 'Scheduled check-in' => $localDate($details['check_in_at']), 'Scheduled check-out' => $localDate($details['check_out_at']), 'Stay total' => $money($details['total_kobo']), 'Verified payments' => $money($details['total_paid_kobo']), 'Balance before check-in' => $money($details['balance_kobo'])] as $label => $value)
+@foreach (['Booking reference' => $details['number'], 'Status' => $details['stay_stage'], 'Room / suite' => $details['room_name'], 'Room category' => $details['room_category'], 'Scheduled check-in' => $localDate($details['check_in_at']), 'Scheduled check-out' => $localDate($details['check_out_at']), 'Stay total' => $money($details['total_kobo']), 'Verified guest payments' => $money($details['total_paid_kobo']), 'Balance before check-in' => $details['balance_text'] ?? $money($details['balance_kobo'])] as $label => $value)
 <tr><th align="left" style="border-bottom:1px solid #eee;font-weight:normal;color:#70656a">{{ $label }}</th><td align="right" style="border-bottom:1px solid #eee">{{ $value }}</td></tr>
 @endforeach
 @if ($details['hold_expires_at'])<tr><th align="left">Temporary hold expires</th><td align="right">{{ $details['hold_expires_at'] }}</td></tr>@endif

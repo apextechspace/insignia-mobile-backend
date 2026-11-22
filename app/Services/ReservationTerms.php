@@ -41,6 +41,7 @@ class ReservationTerms
 
     public static function summary(array $terms): string
     {
+        if (!empty($terms['external'])) return 'External reservation. Payment and cancellation arrangements follow the original channel confirmation: '.($terms['channel_terms'] ?? 'Refer to the channel confirmation.');
         $text = 'Required verified payment: ₦'.number_format($terms['minimum_kobo'] / 100, 2).'. Remaining balance must be verified before check-in. Final room prices already include any owner-applied taxes.';
         if ($terms['cancellation_enabled']) {
             $text .= (isset($terms['refund_admin_fee_percent']) ? ' Cancellation notice deadline: ' : ' Full-refund deadline: ').CarbonImmutable::parse($terms['refund_deadline'])->format('D, j M Y, g:i A').' Nigeria time.'.(! empty($terms['booked_after_deadline']) ? ' This booking is already outside that free-cancellation window.' : '').' Later cancellations or no-shows: retain up to ₦'.number_format($terms['cancellation_charge_kobo'] / 100, 2).' of money received. Contact Guest Relations; refunds and room release require manual handling.';

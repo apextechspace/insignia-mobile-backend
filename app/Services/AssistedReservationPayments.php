@@ -92,7 +92,7 @@ class AssistedReservationPayments
                 }
 
                 $total = self::kobo($stay->total_price);
-                if ($stay->status === 'confirmed' && (int) $payment->amount_kobo !== self::balance($stay)) {
+                if (!$stay->external_source && $stay->status === 'confirmed' && (int) $payment->amount_kobo !== self::balance($stay)) {
                     throw ValidationException::withMessages(['payment_id' => 'The balance payment must match the full outstanding balance. Reject incorrect proof and record the correct payment.']);
                 }
                 $verified = self::verified($stay) + $payment->amount_kobo;
@@ -185,6 +185,7 @@ class AssistedReservationPayments
 
     public static function canCollect(Booking $stay): bool
     {
+        if ($stay->external_source && ($stay->external_details['payment_arrangement'] ?? null) !== 'pay_at_property') return false;
         return ($stay->reserved_by !== null || $stay->minimum_payment_kobo !== null)
             && ! $stay->paid_at && ! $stay->checked_in_at && ! $stay->checked_out_at
             && in_array($stay->status, ['pending', 'confirmed'], true);

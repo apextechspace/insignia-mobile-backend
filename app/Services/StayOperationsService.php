@@ -29,7 +29,7 @@ class StayOperationsService
             $room = Room::whereKey($booking->room_id)->lockForUpdate()->firstOrFail();
             $stay = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
 
-            if (!$stay->paid_at || !in_array($stay->status, ['confirmed', 'paid'], true)
+            if (!ExternalReservations::guestPaymentCleared($stay) || !in_array($stay->status, ['confirmed', 'paid'], true)
                 || $stay->checked_in_at || $stay->checked_out_at) {
                 throw ValidationException::withMessages(['booking' => 'A confirmed paid reservation is required for check-in.']);
             }

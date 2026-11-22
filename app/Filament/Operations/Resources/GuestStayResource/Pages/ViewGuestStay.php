@@ -26,6 +26,54 @@ class ViewGuestStay extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reviewExternalArrangement')->label('Confirm Payment Arrangement')
+                ->authorize(fn () => (auth()->user()?->isIplAdmin() || auth()->user()?->isDeliveryPartner()) && $this->record->external_source && $this->record->status === 'confirmed' && !$this->record->checked_in_at && !$this->record->paid_at && !\App\Services\ExternalReservations::channelPaymentVerified($this->record))
+                ->form([
+                    Components\Select::make('mode')->label('Confirmed arrangement')->options(array_intersect_key(\App\Services\ExternalReservations::ARRANGEMENTS, array_flip(['pay_at_property', 'channel_collects'])))->required(),
+                    Components\Textarea::make('note')->label('Channel confirmation reference and reason')->required()->maxLength(2000),
+                ])->action(function (Action $action, array $data) {
+                    try { app(\App\Services\ExternalReservations::class)->setPaymentArrangement($this->record, auth()->user(), $data['mode'], $data['note']); }
+                    catch (ValidationException $exception) { Notification::make()->danger()->title($exception->getMessage())->send(); $action->halt(); }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Payment arrangement reviewed and recorded')->send();
+                }),
+            Action::make('cancelExternalReservation')->label('Record Channel Cancellation')->color('danger')
+                ->authorize(fn () => (auth()->user()?->isIplAdmin() || auth()->user()?->isDeliveryPartner()) && $this->record->external_source && $this->record->status === 'confirmed' && !$this->record->checked_in_at)
+                ->modalDescription('First confirm cancellation in the original channel. This releases the dates locally, preserves all payment evidence and does not issue a refund. Owner finance must handle records with property payment evidence.')
+                ->form([
+                    Components\Textarea::make('note')->label('Channel cancellation reference and reason')->required()->minLength(10)->maxLength(2000),
+                    Components\Checkbox::make('confirmed')->label('I confirmed this cancellation in the original channel')->accepted()->required(),
+                ])->action(function (Action $action, array $data) {
+                    try { app(\App\Services\ExternalReservations::class)->cancel($this->record, auth()->user(), $data['note']); }
+                    catch (ValidationException $exception) { Notification::make()->danger()->title($exception->getMessage())->send(); $action->halt(); }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Channel cancellation recorded. No refund was issued.')->send();
+                }),
+            Action::make('verifyChannelGuestPayment')->label('Verify Guest Channel Payment')->icon('heroicon-o-shield-check')
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && $this->record->external_source
+                    && ($this->record->external_details['payment_arrangement'] ?? null) === 'channel_collects'
+                    && !\App\Services\ExternalReservations::channelPaymentVerified($this->record) && $this->record->status === 'confirmed')
+                ->modalDescription('Verify that the channel has collected the full accommodation payment from the guest. This does not confirm a payout to Insignia or post cash income. Never request a second guest payment just because a channel payout is pending.')
+                ->form([
+                    Components\FileUpload::make('evidence')->label('Channel payment confirmation')->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])->maxSize(5120)->storeFiles(false)->required(),
+                    Components\Textarea::make('note')->label('Verification note / channel payment reference')->required()->maxLength(2000),
+                    Components\Checkbox::make('verified')->label('I checked the original channel record and confirmed full guest payment for this room')->accepted()->required(),
+                ])->action(function (array $data) {
+                    abort_unless(AssistedReservationPayments::canVerify(auth()->user()), 403);
+                    $file = $data['evidence'];
+                    abort_unless($file instanceof TemporaryUploadedFile, 422);
+                    app(\App\Services\ExternalReservations::class)->verifyGuestChannelPayment($this->record, auth()->user(), $file->store('external-channel-evidence', 'local'), $data['note']);
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Guest channel payment verified. Property payout remains separate.')->send();
+                }),
+            Action::make('downloadChannelEvidence')->label('Download Channel Evidence')
+                ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()) && filled($this->record->external_details['guest_payment_evidence'] ?? null))
+                ->action(function () {
+                    abort_unless(AssistedReservationPayments::canVerify(auth()->user()), 403);
+                    $path = $this->record->external_details['guest_payment_evidence'];
+                    abort_unless(Storage::disk('local')->exists($path), 404);
+                    return Storage::disk('local')->download($path);
+                }),
             Action::make('printRegistrationCard')->label('Print Registration Card')->icon('heroicon-o-printer')
                 ->authorize(fn () => GuestStayResource::canViewAny())
                 ->url(fn () => route('guest-registration-card.print', ['booking' => $this->record->id]))->openUrlInNewTab(),
@@ -51,7 +99,7 @@ class ViewGuestStay extends ViewRecord
                     Notification::make()->success()->title('Deposit exception approved. Dates secured.')->send();
                 }),
             Action::make('recordPosPayment')
-                ->label(fn (): string => $this->record->status === 'confirmed' ? 'Collect Balance' : 'Record Payment')
+                ->label(fn (): string => $this->record->external_source ? 'Record Guest Payment' : ($this->record->status === 'confirmed' ? 'Collect Balance' : 'Record Payment'))
                 ->authorize(fn () => GuestStayResource::canViewAny() && AssistedReservationPayments::canCollect($this->record))
                 ->disabled(fn () => AssistedReservationPayments::pending($this->record)->exists())
                 ->tooltip(fn () => AssistedReservationPayments::pending($this->record)->exists() ? 'A proof is already awaiting verification. Verify or reject it before recording another payment.' : null)
@@ -65,7 +113,7 @@ class ViewGuestStay extends ViewRecord
                     Components\Select::make('method')->label('Payment method')->options(AssistedReservationPayments::METHODS)
                         ->default('pos')->required(),
                     Components\TextInput::make('amount')->label('Amount received (₦)')
-                        ->readOnly(fn () => $this->record->status === 'confirmed')
+                        ->readOnly(fn () => !$this->record->external_source && $this->record->status === 'confirmed')
                         ->required()->numeric()->rules(['decimal:0,2'])->minValue(0.01)->maxValue(99999999.99),
                     Components\TextInput::make('reference')->label('Bank transaction reference')->required()->maxLength(120),
                     Components\DatePicker::make('transaction_date')->required()
@@ -87,7 +135,7 @@ class ViewGuestStay extends ViewRecord
                             throw ValidationException::withMessages(['data.reference' => 'A proof is already awaiting verification. Verify or reject it before recording another payment.']);
                         }
                         $amount = AssistedReservationPayments::kobo($data['amount']);
-                        if ($stay->status === 'confirmed' && $amount !== AssistedReservationPayments::balance($stay)) {
+                        if (!$stay->external_source && $stay->status === 'confirmed' && $amount !== AssistedReservationPayments::balance($stay)) {
                             throw ValidationException::withMessages(['data.amount' => 'Record the full outstanding balance for this confirmed reservation.']);
                         }
                         if ($amount > AssistedReservationPayments::balance($stay)) {

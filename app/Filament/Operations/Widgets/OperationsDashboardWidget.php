@@ -81,7 +81,7 @@ class OperationsDashboardWidget extends Widget
 
         $upcomingQuery = Booking::with(['room', 'user'])
             ->whereIn('status', ['confirmed', 'paid'])
-            ->where(fn ($query) => $query->whereNotNull('paid_at')->orWhereExists(
+            ->where(fn ($query) => $query->whereNotNull('external_source')->orWhereNotNull('paid_at')->orWhereExists(
                 fn ($receipts) => $receipts->selectRaw('1')->from('assisted_reservation_payments')
                     ->whereColumn('assisted_reservation_payments.booking_id', 'bookings.id')->whereNotNull('verified_at')
             ))
