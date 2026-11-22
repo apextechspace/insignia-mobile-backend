@@ -56,4 +56,6 @@ This deletes application records only. It cannot undo payments, refunds, provide
 
 ## A retained cleaning status has no checklist
 
+Room Readiness Review shows the latest checklist status and an Open Checklist link. Its confirmation action displays a persistent blocker notification if release fails, or a success message when the room becomes available. Successful checklist verification records the supervisor and verification time.
+
 If a test room remains in cleaning after cleanup, do not rerun cleanup or bypass readiness checks. As owner/facility manager, open Room Status → Edit → **Create Readiness Checklist**. This is available only when a cleaning room has no turnaround checklist. It creates a pending inspection, not a completed or verified task. Under Tasks, inspect the room, check each item and mark the task completed. Then use Room Readiness Review → **Verify & Release**. The room becomes available without changing its price, images or catalogue availability switch. Existing checklists and checked-in guests block recovery; continue the normal task/checkout workflow for those rooms. Blocked status edits now show a persistent notification and an inline validation message.

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Operations\Resources\RoomStatusResource\Pages\EditRoomStatus;
+use App\Filament\Operations\Resources\RoomReadinessResource\Pages\ListRoomReadiness;
 use App\Models\{Booking, Room, StaffTask, User};
 use App\Services\RoomTurnoverService;
 use Filament\Facades\Filament;
@@ -72,5 +73,32 @@ class RoomStatusFeedbackTest extends TestCase
         $stay->forceFill(['checked_in_at' => now()])->save();
         try { $service->createMissingChecklist($another, $manager); $this->fail('Active guest was ignored'); }
         catch (ValidationException) { $this->assertDatabaseCount('staff_tasks', 1); }
+    }
+
+    public function test_readiness_confirm_shows_the_blocker_instead_of_silently_refreshing(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        Livewire::test(ListRoomReadiness::class)->assertSee('Missing checklist')
+            ->callTableAction('release', $room);
+        Notification::assertNotified(Notification::make()->danger()->persistent()->title('Room could not be released')
+            ->body('Finish the latest checkout cleaning task before marking this suite ready. Use Open Checklist to finish the task, or Create Missing Checklist if none exists.'));
+        $this->assertSame('cleaning', $room->fresh()->status);
+        $task = app(RoomTurnoverService::class)->createMissingChecklist($room, $manager);
+        Livewire::test(ListRoomReadiness::class)->assertSee('Pending')->callTableAction('release', $room);
+        $this->assertSame('pending', $task->fresh()->status);
+        $this->assertSame('cleaning', $room->fresh()->status);
+    }
+
+    public function test_readiness_confirm_releases_a_completed_room_and_records_the_reviewer(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        $task = app(RoomTurnoverService::class)->createMissingChecklist($room, $manager);
+        $task->update(['checklist_items' => array_map(fn ($item) => array_merge($item, ['done' => true]), $task->checklist_items), 'status' => 'completed']);
+        Livewire::test(ListRoomReadiness::class)->callTableAction('release', $room)->assertCanNotSeeTableRecords([$room]);
+        Notification::assertNotified(Notification::make()->success()->title('Room verified and released')->body('Papilio is now available for check-in.'));
+        $this->assertSame('available', $room->fresh()->status);
+        $this->assertSame('verified', $task->fresh()->status);
+        $this->assertEquals($manager->id, $task->fresh()->verified_by);
+        $this->assertNotNull($task->fresh()->verified_at);
     }
 }

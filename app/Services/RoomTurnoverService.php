@@ -62,7 +62,7 @@ class RoomTurnoverService
             throw ValidationException::withMessages(['room' => 'Only authorized supervisors may release a cleaned suite.']);
         }
 
-        DB::transaction(function () use ($room) {
+        DB::transaction(function () use ($room, $reviewer) {
             $lockedRoom = Room::whereKey($room->id)->lockForUpdate()->firstOrFail();
 
             if (! in_array($lockedRoom->status, ['cleaning', 'maintenance'], true)) {
@@ -101,7 +101,7 @@ class RoomTurnoverService
                 }
             }
 
-            $task->update(['status' => 'verified']);
+            $task->update(['status' => 'verified', 'verified_by' => $reviewer->id, 'verified_at' => now()]);
             $lockedRoom->update(['status' => 'available']);
         }, 3);
     }
