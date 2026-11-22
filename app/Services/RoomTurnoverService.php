@@ -15,6 +15,27 @@ use Illuminate\Validation\ValidationException;
  */
 class RoomTurnoverService
 {
+    public function createMissingChecklist(Room $room, User $reviewer): StaffTask
+    {
+        if (!in_array($reviewer->role, [User::ROLE_ADMIN, User::ROLE_IPL_ADMIN, User::ROLE_DELIVERY_PARTNER], true)) {
+            throw ValidationException::withMessages(['room' => 'Only an owner or facility manager may recreate a readiness checklist.']);
+        }
+        return DB::transaction(function () use ($room, $reviewer): StaffTask {
+            $locked = Room::whereKey($room->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'cleaning'
+                || Booking::where('room_id', $locked->id)->whereNotNull('checked_in_at')->whereNull('checked_out_at')->exists()) {
+                throw ValidationException::withMessages(['room' => 'Only a vacant room awaiting cleaning can receive a missing checklist.']);
+            }
+            if (StaffTask::where('room_id', $locked->id)->where('task_type', 'room_turnaround')->exists()) {
+                throw ValidationException::withMessages(['room' => 'A turnaround checklist already exists. Complete and review the existing task.']);
+            }
+            $task = $this->createForCheckout($locked);
+            $task->update(['task_title' => 'Room readiness inspection – '.$locked->name,
+                'notes' => 'Missing readiness checklist recreated by staff #'.$reviewer->id.'. Complete the physical inspection before supervisor release.']);
+            return $task;
+        }, 3);
+    }
+
     public function createForCheckout(Room $room): StaffTask
     {
         return StaffTask::create([

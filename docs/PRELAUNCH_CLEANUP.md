@@ -53,3 +53,7 @@ php artisan up
 Re-enable the queue/scheduler cron. Confirm the owner and staff can sign in, all six rooms/prices/photos are correct, catalogues/settings remain, no test bookings or ledger rows appear, operating float/receipt statements start at zero, and room readiness/stock counts match reality. A preview-only repeat is safe. Any new live transaction after reopening must be kept.
 
 This deletes application records only. It cannot undo payments, refunds, provider transaction history or emails already sent through Flutterwave, a bank or SMTP. Keep old transaction IDs unreused; do not reset AUTO_INCREMENT or rerun seeders. Smart locks, City Ledger spending and other deferred functionality are separate work.
+
+## A retained cleaning status has no checklist
+
+If a test room remains in cleaning after cleanup, do not rerun cleanup or bypass readiness checks. As owner/facility manager, open Room Status → Edit → **Create Readiness Checklist**. This is available only when a cleaning room has no turnaround checklist. It creates a pending inspection, not a completed or verified task. Under Tasks, inspect the room, check each item and mark the task completed. Then use Room Readiness Review → **Verify & Release**. The room becomes available without changing its price, images or catalogue availability switch. Existing checklists and checked-in guests block recovery; continue the normal task/checkout workflow for those rooms. Blocked status edits now show a persistent notification and an inline validation message.

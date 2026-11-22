@@ -43,7 +43,7 @@ class RoomStatusResource extends Resource
                                 'maintenance' => 'Under Maintenance',
                                 'reserved' => 'Reserved',
                             ])
-                            ->helperText('Occupied is managed by Check In/Check Out. Do not mark a checked-in suite as ready.')
+                            ->helperText('Occupied is managed by Check In/Check Out. Cleaning rooms need a completed checklist and Room Readiness Review → Verify & Release. If the checklist is missing, use Create Readiness Checklist above.')
                             ->required()
                             ->live()
                             ->native(false),

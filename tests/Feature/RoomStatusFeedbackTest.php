@@ -1,0 +1,76 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Filament\Operations\Resources\RoomStatusResource\Pages\EditRoomStatus;
+use App\Models\{Booking, Room, StaffTask, User};
+use App\Services\RoomTurnoverService;
+use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class RoomStatusFeedbackTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function manager(): User
+    {
+        Filament::setCurrentPanel(Filament::getPanel('operations'));
+        $user = User::factory()->create(['role' => User::ROLE_DELIVERY_PARTNER]);
+        $this->actingAs($user);
+        return $user;
+    }
+
+    private function room(): Room
+    {
+        return Room::create(['name' => 'Papilio', 'type' => 'Suite', 'price_per_night' => 161250,
+            'images' => ['rooms/papilio.jpg'], 'status' => 'cleaning', 'is_available' => true]);
+    }
+
+    public function test_blocked_ready_edit_shows_a_visible_notification_and_inline_field_error(): void
+    {
+        $this->manager(); $room = $this->room();
+        Livewire::test(EditRoomStatus::class, ['record' => $room->id])
+            ->fillForm(['status' => 'available'])->call('save')->assertHasFormErrors(['status']);
+        Notification::assertNotified(Notification::make()->danger()->title('Room status was not changed')
+            ->body('A supervisor must verify the latest turnaround checklist before this room can be marked ready. For cleaning rooms, complete the checklist under Tasks, then use Room Readiness Review → Verify & Release.')
+            ->persistent());
+        $this->assertSame('cleaning', $room->fresh()->status);
+    }
+
+    public function test_missing_checklist_can_be_recreated_then_completed_and_verified_without_repricing(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        Livewire::test(EditRoomStatus::class, ['record' => $room->id])->callAction('createReadinessChecklist');
+        $task = StaffTask::where('room_id', $room->id)->sole();
+        $this->assertSame('pending', $task->status);
+        $this->assertSame('cleaning', $room->fresh()->status);
+        $this->assertCount(4, $task->checklist_items);
+        $task->update(['checklist_items' => array_map(fn ($item) => array_merge($item, ['done' => true]), $task->checklist_items), 'status' => 'completed']);
+        app(RoomTurnoverService::class)->markReady($room, $manager);
+        $this->assertSame('verified', $task->fresh()->status);
+        $this->assertSame('available', $room->fresh()->status);
+        $this->assertEquals(161250, $room->fresh()->price_per_night);
+        $this->assertSame(['rooms/papilio.jpg'], json_decode($room->fresh()->getRawOriginal('images'), true));
+    }
+
+    public function test_recovery_rejects_duplicate_checklists_unauthorised_staff_and_an_active_guest(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        $service = app(RoomTurnoverService::class);
+        $service->createMissingChecklist($room, $manager);
+        try { $service->createMissingChecklist($room, $manager); $this->fail('Duplicate checklist accepted'); }
+        catch (ValidationException) { $this->assertDatabaseCount('staff_tasks', 1); }
+        $another = $this->room();
+        try { $service->createMissingChecklist($another, User::factory()->create(['role' => User::ROLE_GUEST_RELATIONS])); $this->fail('Guest Relations created a recovery checklist'); }
+        catch (ValidationException) { $this->assertDatabaseCount('staff_tasks', 1); }
+        $stay = Booking::create(['user_id' => $manager->id, 'room_id' => $another->id, 'check_in' => today()->toDateString(),
+            'check_out' => today()->addDay()->toDateString(), 'total_price' => 161250, 'payment_method' => 'pos']);
+        $stay->forceFill(['checked_in_at' => now()])->save();
+        try { $service->createMissingChecklist($another, $manager); $this->fail('Active guest was ignored'); }
+        catch (ValidationException) { $this->assertDatabaseCount('staff_tasks', 1); }
+    }
+}
