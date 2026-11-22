@@ -125,6 +125,7 @@ class StaffTaskResource extends Resource
                             ->disabled(fn (): bool => Auth::user()?->isStaff())
                             ->dehydrated(fn (): bool => ! Auth::user()?->isStaff())
                             ->label('Status')
+                            ->helperText('Completed requires every Done switch in the checklist to be on. Save changes before opening Room Readiness Review.')
                             ->options([
                                 'pending' => 'Pending',
                                 'in_progress' => 'In Progress',
@@ -139,6 +140,7 @@ class StaffTaskResource extends Resource
                     ->schema([
                         Forms\Components\Repeater::make('checklist_items')
                             ->label('Checklist Items')
+                            ->helperText('The Done label alone does not mean the item is checked. Switch each toggle on after inspecting that item.')
                             ->defaultItems(0)
                             ->addable(fn (): bool => ! Auth::user()?->isStaff())
                             ->deletable(fn (): bool => ! Auth::user()?->isStaff())

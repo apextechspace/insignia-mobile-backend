@@ -6,10 +6,28 @@ use App\Filament\Operations\Resources\StaffTaskResource;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Filament\Notifications\Notification;
 
 class EditStaffTask extends EditRecord
 {
     protected static string $resource = StaffTaskResource::class;
+
+    public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
+    {
+        try {
+            parent::save($shouldRedirect, $shouldSendSavedNotification);
+        } catch (ValidationException $exception) {
+            $checklistError = collect(array_keys($exception->errors()))->contains(fn ($field) => str_contains($field, 'checklist_items'));
+            Notification::make()->danger()->persistent()->title('Task was not saved')
+                ->body(collect($exception->errors())->flatten()->first().($checklistError ? ' Switch on Done for every item before selecting Completed, then save again.' : ''))
+                ->send();
+            $errors = [];
+            foreach ($exception->errors() as $field => $messages) {
+                $errors[str_starts_with($field, 'data.') ? $field : 'data.'.$field] = $messages;
+            }
+            throw ValidationException::withMessages($errors);
+        }
+    }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {

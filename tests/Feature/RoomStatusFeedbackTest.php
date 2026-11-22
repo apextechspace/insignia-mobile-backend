@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Operations\Resources\RoomStatusResource\Pages\EditRoomStatus;
 use App\Filament\Operations\Resources\RoomReadinessResource\Pages\ListRoomReadiness;
+use App\Filament\Operations\Resources\StaffTaskResource\Pages\EditStaffTask;
 use App\Models\{Booking, Room, StaffTask, User};
 use App\Services\RoomTurnoverService;
 use Filament\Facades\Filament;
@@ -100,5 +101,33 @@ class RoomStatusFeedbackTest extends TestCase
         $this->assertSame('verified', $task->fresh()->status);
         $this->assertEquals($manager->id, $task->fresh()->verified_by);
         $this->assertNotNull($task->fresh()->verified_at);
+    }
+
+    public function test_task_form_shows_checklist_error_and_retains_in_progress_when_items_are_unchecked(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        $task = app(RoomTurnoverService::class)->createMissingChecklist($room, $manager);
+        $task->update(['status' => 'in_progress']);
+        Livewire::test(EditStaffTask::class, ['record' => $task->id])
+            ->fillForm(['status' => 'completed'])->call('save')->assertHasFormErrors(['checklist_items']);
+        Notification::assertNotified(Notification::make()->danger()->persistent()->title('Task was not saved')
+            ->body('Finish every cleaning checklist item. Switch on Done for every item before selecting Completed, then save again.'));
+        $this->assertSame('in_progress', $task->fresh()->status);
+        $this->assertNull($task->fresh()->completed_at);
+    }
+
+    public function test_actual_task_form_completion_then_readiness_confirmation_releases_the_room(): void
+    {
+        $manager = $this->manager(); $room = $this->room();
+        $task = app(RoomTurnoverService::class)->createMissingChecklist($room, $manager);
+        $task->update(['status' => 'in_progress']);
+        Livewire::test(EditStaffTask::class, ['record' => $task->id])
+            ->fillForm(fn (array $state) => ['status' => 'completed', 'checklist_items' => array_map(fn ($item) => array_merge($item, ['done' => true]), $state['checklist_items'])])
+            ->call('save', false)->assertHasNoFormErrors();
+        $this->assertSame('completed', $task->fresh()->status);
+        $this->assertNotNull($task->fresh()->completed_at);
+        Livewire::test(ListRoomReadiness::class)->callTableAction('release', $room)->assertCanNotSeeTableRecords([$room]);
+        $this->assertSame('available', $room->fresh()->status);
+        $this->assertSame('verified', $task->fresh()->status);
     }
 }
