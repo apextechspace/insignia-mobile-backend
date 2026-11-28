@@ -4,6 +4,8 @@ namespace App\Filament\Operations\Resources\GuestStayResource\Pages;
 
 use App\Filament\Operations\Resources\GuestStayResource;
 use App\Services\AssistedReservationPayments;
+use App\Services\GuestCityLedger;
+use App\Models\GuestCityLedgerAccount;
 use App\Models\Room;
 use Filament\Actions\Action;
 use Filament\Forms\Components;
@@ -166,6 +168,27 @@ class ViewGuestStay extends ViewRecord
                     Notification::make()->success()->title('Payment proof submitted for verification')
                         ->body($reviewExpiry ? 'Room held until '.$reviewExpiry->timezone(config('property.timezone'))->format('g:i A T').'.' : null)
                         ->send();
+                }),
+            Action::make('applyCityLedger')
+                ->label('Use Guest City Ledger')->icon('heroicon-o-wallet')
+                ->color('success')
+                ->authorize(fn () => GuestCityLedger::canManage(auth()->user()) && AssistedReservationPayments::canCollect($this->record))
+                ->modalDescription(fn () => 'This applies the full outstanding room amount (₦'.number_format(AssistedReservationPayments::balance($this->record) / 100, 2).') from verified prepaid guest funds. It cannot be undone here.')
+                ->form([
+                    Components\Select::make('account_id')->label('Prepaid account')->searchable()->required()
+                        ->options(fn () => GuestCityLedgerAccount::where('status', 'active')->orderBy('guest_name')->get()->mapWithKeys(fn ($account) => [$account->id => $account->guest_name.' · '.$account->account_reference.' · Available ₦'.number_format(GuestCityLedger::balance($account) / 100, 2)])->all()),
+                    Components\Textarea::make('notes')->label('Booking note')->maxLength(2000),
+                    Components\Checkbox::make('confirmed')->label('I confirmed the guest wants this prepaid balance used for this complete room booking')->accepted()->required(),
+                ])
+                ->action(function (Action $action, array $data): void {
+                    try {
+                        $account = GuestCityLedgerAccount::findOrFail($data['account_id']);
+                        app(GuestCityLedger::class)->applyToBooking($account, $this->record, auth()->user(), $data['notes'] ?? null);
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title('City Ledger was not applied')->body(collect($exception->errors())->flatten()->implode(' '))->persistent()->send(); $action->halt();
+                    }
+                    $this->record->refresh();
+                    Notification::make()->success()->title('Guest City Ledger applied')->body('The room is fully paid from prepaid funds and is ready for normal check-in on the arrival date.')->send();
                 }),
             Action::make('downloadPosProof')->label('Download Payment Proof')
                 ->authorize(fn () => AssistedReservationPayments::canVerify(auth()->user()))
